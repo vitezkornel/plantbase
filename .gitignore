@@ -4,4 +4,16 @@ dist/
 logs/
 .nx/cache/
 .nx/workspace-data/
+.nx/polygraph/
+.nx/self-healing/
+.nx/migrate-runs/
+out-tsc/
+tmp/
+coverage/
+vitest.config.*.timestamp*
+*.tsbuildinfo
 *.log
+.superpowers/
+
+# Prisma generated client (packages/db) — regenerated via `prisma generate`/`migrate dev`
+packages/db/generated/

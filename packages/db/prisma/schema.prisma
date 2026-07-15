@@ -1,0 +1,39 @@
+// Prisma schema — packages/db (architektura.md #6: Prisma lib, not repo root)
+// Connection URL is configured in ../prisma.config.ts (Prisma 7 config model), not here.
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+  output     = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// products (stack.md) — plain-text categorical columns on purpose (no DB enum,
+// see konvenciok.md: "string literal union enum helyett" applies to TS, not this SQL table).
+model Product {
+  id              Int      @id @default(autoincrement())
+  name            String? // köznapi név
+  latinName       String?  @map("latin_name")
+  category        String? // szobanövény / kerti / pozsgás / kaktusz / fűszer / fa-cserje / lógó / virágzó
+  location        String? // beltéri / kültéri / mindkettő
+  price           Decimal? // ár (HUF)
+  salePrice       Decimal? @map("sale_price") // akciós ár (ha van akció), különben null
+  stock           Int? // raktárkészlet (db)
+  light           String? // árnyék / alacsony / közepes / erős / direkt nap
+  watering        String? // ritka / közepes / gyakori / állandóan nedves
+  difficulty      String? // kezdő / haladó / profi
+  currentHeightCm Int?     @map("current_height_cm") // aktuális magasság
+  maxHeightCm     Int?     @map("max_height_cm") // kifejlett (max) magasság
+  currentPotCm    Int?     @map("current_pot_cm") // aktuális cserépméret
+  petSafe         Boolean? @map("pet_safe") // háziállat-barát
+  kidSafe         Boolean? @map("kid_safe") // gyerekbiztos (nem mérgező)
+  airPurifying    Boolean? @map("air_purifying") // légtisztító
+  rating          Decimal? // 0-5
+  reviewsCount    Int?     @map("reviews_count")
+  description     String?
+
+  @@map("products")
+}
