@@ -51,23 +51,53 @@ describe('plantbase_readonly role', () => {
     expect(Number(result.rows[0].count)).toBeGreaterThan(0);
   });
 
+  // The three tests below attempt writes that are *expected* to fail with
+  // 42501 (insufficient_privilege). But the whole point of this test is to
+  // catch the case where that expectation is wrong and the readonly role
+  // unexpectedly has write access — so each attempt is wrapped in an
+  // explicit BEGIN/ROLLBACK on this same client (transaction state is
+  // per-connection, so it must run on the same `client`, not a separate
+  // pool connection) and scoped to a WHERE predicate that can't match any
+  // real seeded row. That way even a would-be-successful write is (a) never
+  // committed and (b), belt-and-suspenders, never targets real data in the
+  // first place.
+
   it('cannot INSERT into products', async () => {
-    await expect(
-      client.query(
-        "INSERT INTO products (name) VALUES ('readonly-role-spec-should-not-insert')",
-      ),
-    ).rejects.toMatchObject({ code: '42501' }); // insufficient_privilege
+    await client.query('BEGIN');
+    try {
+      await expect(
+        client.query(
+          "INSERT INTO products (name) VALUES ('__readonly-role-spec-sentinel-should-not-insert__')",
+        ),
+      ).rejects.toMatchObject({ code: '42501' }); // insufficient_privilege
+    } finally {
+      await client.query('ROLLBACK');
+    }
   });
 
   it('cannot UPDATE products', async () => {
-    await expect(
-      client.query("UPDATE products SET name = 'hacked' WHERE id = 1"),
-    ).rejects.toMatchObject({ code: '42501' });
+    await client.query('BEGIN');
+    try {
+      await expect(
+        // id = -1 can never match a seeded row (autoincrement ids are positive).
+        client.query("UPDATE products SET name = 'hacked' WHERE id = -1"),
+      ).rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await client.query('ROLLBACK');
+    }
   });
 
   it('cannot DELETE from products', async () => {
-    await expect(client.query('DELETE FROM products')).rejects.toMatchObject({
-      code: '42501',
-    });
+    await client.query('BEGIN');
+    try {
+      await expect(
+        // id = -1 can never match a seeded row (autoincrement ids are positive).
+        client.query('DELETE FROM products WHERE id = -1'),
+      ).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      await client.query('ROLLBACK');
+    }
   });
 });
