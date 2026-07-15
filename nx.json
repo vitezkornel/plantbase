@@ -54,6 +54,9 @@
           "fields": ["extends", "files", "include"]
         }
       ]
+    },
+    "test": {
+      "dependsOn": ["^build"]
     }
   }
 }
