@@ -4,8 +4,13 @@ import '../../config/env.js';
 import {
   writeInteractionLog,
   type AgentUsage,
+  type SqlCallLogEntry,
 } from '../../logging/jsonl-logger.js';
-import { runAgentLoop } from '../agent-loop.js';
+import {
+  RUN_SQL_TOOL_NAME,
+  runSqlTool,
+} from '../../tools/run-sql/run-sql-tool.js';
+import { runAgentLoop, type ToolCallRecord } from '../agent-loop.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 
 const MODEL: Anthropic.Model = 'claude-sonnet-5';
@@ -36,9 +41,12 @@ export interface AskAgentResult {
 }
 
 /**
- * Plain conversational LLM call — no tools, no DB (B Fázis 2). Framework-
- * agnostic: takes a question string in, returns plain data out. The caller
- * (apps/cli today; a future API/web app later) is responsible for all I/O.
+ * The Plantbase catalog assistant (FR2/FR3): translates the question to
+ * SQL, runs it read-only via the `runSql` tool, and answers in natural
+ * language from the result — a multistep agent-loop, not a single call.
+ * Framework-agnostic: takes a question string in, returns plain data out.
+ * The caller (apps/cli today; a future API/web app later) is responsible
+ * for all I/O.
  */
 export async function askAgent(
   question: string,
@@ -57,6 +65,7 @@ export async function askAgent(
     maxTokens: MAX_TOKENS,
     system: ASK_AGENT_SYSTEM_PROMPT,
     messages,
+    tools: [runSqlTool], // one-line tool registration (konvenciok.md)
   });
 
   const logPath = await writeInteractionLog({
@@ -64,6 +73,7 @@ export async function askAgent(
     messages: result.messages,
     response: result.finalText,
     usage: result.usage,
+    sqlCalls: extractSqlCalls(result.toolCalls),
   });
 
   return {
@@ -73,4 +83,38 @@ export async function askAgent(
     usage: result.usage,
     logPath,
   };
+}
+
+/**
+ * Narrows the agent-loop's generic `toolCalls` (any tool, unknown input)
+ * down to the `{ sql, result }` shape FR4's logging requires — `askAgent`
+ * is the place that knows its only registered tool is `runSql` and what
+ * its input field is called; `runAgentLoop` itself stays tool-agnostic.
+ */
+function extractSqlCalls(toolCalls: ToolCallRecord[]): SqlCallLogEntry[] {
+  return toolCalls
+    .filter((call) => call.name === RUN_SQL_TOOL_NAME)
+    .map((call) => ({
+      sql: extractSqlText(call.input),
+      result: call.outcome,
+    }));
+}
+
+/**
+ * Best-effort extraction of the `sql` string from a `runSql` tool call's
+ * raw (LLM-produced, unvalidated) input — falls back to a JSON dump so a
+ * malformed call (which the tool's own Zod schema will separately have
+ * rejected, see run-sql-schema.ts) still ends up somewhere in the log
+ * rather than silently vanishing.
+ */
+function extractSqlText(input: unknown): string {
+  if (
+    typeof input === 'object' &&
+    input !== null &&
+    'sql' in input &&
+    typeof (input as { sql: unknown }).sql === 'string'
+  ) {
+    return (input as { sql: string }).sql;
+  }
+  return JSON.stringify(input);
 }

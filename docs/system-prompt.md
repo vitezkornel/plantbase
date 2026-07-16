@@ -48,6 +48,6 @@ products (
 </behavior>
 
 <tools>
-- runSql(query): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
+- runSql(sql): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
 </tools>
 ```

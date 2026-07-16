@@ -4,6 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { askAgent } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 
+// This is a fast unit-test file: only the DB round-trip is mocked here
+// (readonly-db-client.js) so `askAgent` still exercises its own real
+// runSql-tool wiring (Zod schema + guard) end to end. The live-DB proof
+// that the guard AND the DB role both hold lives in
+// tools/run-sql/run-sql-tool.spec.ts's integration tests instead.
+vi.mock('../../tools/run-sql/readonly-db-client.js', () => ({
+  runReadonlyQuery: vi.fn().mockResolvedValue({
+    rows: [{ id: 1, name: 'Teszt Növény' }],
+    rowCount: 1,
+  }),
+  closeReadonlyPool: vi.fn(),
+}));
+
 function makeClient(text: string): Anthropic {
   return {
     messages: {
@@ -14,6 +27,25 @@ function makeClient(text: string): Anthropic {
       }),
     },
   } as unknown as Anthropic;
+}
+
+/** Simulates one runSql tool round-trip before the model's final answer. */
+function makeToolUsingClient(sql: string, finalText: string): Anthropic {
+  const create = vi
+    .fn()
+    .mockResolvedValueOnce({
+      content: [
+        { type: 'tool_use', id: 'tool_1', name: 'runSql', input: { sql } },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 30, output_tokens: 12 },
+    })
+    .mockResolvedValueOnce({
+      content: [{ type: 'text', text: finalText, citations: null }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 15, output_tokens: 6 },
+    });
+  return { messages: { create } } as unknown as Anthropic;
 }
 
 describe('askAgent', () => {
@@ -59,6 +91,53 @@ describe('askAgent', () => {
       content: 'teszt kérdés',
     });
     expect(typeof entry.timestamp).toBe('string');
+    expect(entry.sqlCalls).toEqual([]);
+
+    await rm(result.logPath, { force: true });
+  });
+
+  it('dispatches a runSql tool_use round-trip and answers from the (mocked) DB result', async () => {
+    const client = makeToolUsingClient(
+      'SELECT id, name FROM products LIMIT 5',
+      'Íme néhány növény.',
+    );
+
+    const result = await askAgent('mit ajánlasz?', { client });
+
+    expect(result.answer).toBe('Íme néhány növény.');
+    // transcript: user, assistant(tool_use), user(tool_result), assistant(text)
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages[1]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'tool_use', name: 'runSql' }],
+    });
+    expect(result.messages[2]).toMatchObject({
+      role: 'user',
+      content: [{ type: 'tool_result', is_error: false }],
+    });
+
+    await rm(result.logPath, { force: true });
+  });
+
+  it('logs the generated SQL and its result alongside the existing fields', async () => {
+    const client = makeToolUsingClient(
+      'SELECT id, name FROM products WHERE pet_safe = true LIMIT 5',
+      'Íme néhány háziállat-barát növény.',
+    );
+
+    const result = await askAgent('milyen növény háziállat-barát?', { client });
+
+    const raw = await readFile(result.logPath, 'utf-8');
+    const entry = JSON.parse(raw.trim().split('\n')[0]);
+
+    expect(entry.sqlCalls).toHaveLength(1);
+    expect(entry.sqlCalls[0].sql).toBe(
+      'SELECT id, name FROM products WHERE pet_safe = true LIMIT 5',
+    );
+    expect(entry.sqlCalls[0].result).toEqual({
+      ok: true,
+      data: { rows: [{ id: 1, name: 'Teszt Növény' }], rowCount: 1 },
+    });
 
     await rm(result.logPath, { force: true });
   });
