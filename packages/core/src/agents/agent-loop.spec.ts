@@ -243,4 +243,175 @@ describe('runAgentLoop', () => {
       runAgentLoop({ client, ...baseInput, tools: [tool] }),
     ).rejects.toThrow(/unknown tool/i);
   });
+
+  it('dispatches a second, refined tool_use call in a later iteration before answering (2 sequential runSql round-trips)', async () => {
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { rows: [] },
+      } satisfies ToolOutcome)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { rows: [{ id: 1 }] },
+      } satisfies ToolOutcome);
+    const tool = makeTool('runSql', execute);
+
+    const client = makeSequentialClient([
+      {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool_1',
+            name: 'runSql',
+            input: { sql: "SELECT * FROM products WHERE name = 'nope'" },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+      {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool_2',
+            name: 'runSql',
+            input: { sql: "SELECT * FROM products WHERE name ILIKE '%nope%'" },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 11, output_tokens: 6 },
+      },
+      {
+        content: [{ type: 'text', text: 'Egy találat van.', citations: null }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 8, output_tokens: 4 },
+      },
+    ]);
+
+    const result = await runAgentLoop({ client, ...baseInput, tools: [tool] });
+
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      sql: "SELECT * FROM products WHERE name = 'nope'",
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
+      sql: "SELECT * FROM products WHERE name ILIKE '%nope%'",
+    });
+    expect(result.finalText).toBe('Egy találat van.');
+    // usage accumulates across all three rounds
+    expect(result.usage).toEqual({ inputTokens: 29, outputTokens: 15 });
+    // both calls are recorded, in order
+    expect(result.toolCalls).toHaveLength(2);
+    expect(result.toolCalls[0]).toEqual({
+      name: 'runSql',
+      input: { sql: "SELECT * FROM products WHERE name = 'nope'" },
+      outcome: { ok: true, data: { rows: [] } },
+    });
+    expect(result.toolCalls[1]).toEqual({
+      name: 'runSql',
+      input: { sql: "SELECT * FROM products WHERE name ILIKE '%nope%'" },
+      outcome: { ok: true, data: { rows: [{ id: 1 }] } },
+    });
+    // transcript: user, assistant(tool_use #1), user(tool_result #1),
+    // assistant(tool_use #2), user(tool_result #2), assistant(text)
+    expect(result.messages).toHaveLength(6);
+    expect(result.messages[2]).toEqual({
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'tool_1',
+          content: JSON.stringify({ rows: [] }),
+          is_error: false,
+        },
+      ],
+    });
+    expect(result.messages[4]).toEqual({
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'tool_2',
+          content: JSON.stringify({ rows: [{ id: 1 }] }),
+          is_error: false,
+        },
+      ],
+    });
+  });
+
+  it('dispatches multiple tool_use blocks from a single model response, in order, before looping again', async () => {
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { rows: [{ id: 1 }] },
+      } satisfies ToolOutcome)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { rows: [{ id: 2 }] },
+      } satisfies ToolOutcome);
+    const tool = makeTool('runSql', execute);
+
+    const client = makeSequentialClient([
+      {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool_a',
+            name: 'runSql',
+            input: {
+              sql: "SELECT id FROM products WHERE category = 'kaktusz'",
+            },
+          },
+          {
+            type: 'tool_use',
+            id: 'tool_b',
+            name: 'runSql',
+            input: { sql: "SELECT id FROM products WHERE category = 'kerti'" },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 14, output_tokens: 9 },
+      },
+      {
+        content: [
+          { type: 'text', text: 'Két kategória van.', citations: null },
+        ],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 8, output_tokens: 4 },
+      },
+    ]);
+
+    const result = await runAgentLoop({ client, ...baseInput, tools: [tool] });
+
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      sql: "SELECT id FROM products WHERE category = 'kaktusz'",
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
+      sql: "SELECT id FROM products WHERE category = 'kerti'",
+    });
+    expect(result.finalText).toBe('Két kategória van.');
+    expect(result.toolCalls).toHaveLength(2);
+    // transcript: user, assistant(2x tool_use), user(2x tool_result), assistant(text)
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages[2]).toEqual({
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'tool_a',
+          content: JSON.stringify({ rows: [{ id: 1 }] }),
+          is_error: false,
+        },
+        {
+          type: 'tool_result',
+          tool_use_id: 'tool_b',
+          content: JSON.stringify({ rows: [{ id: 2 }] }),
+          is_error: false,
+        },
+      ],
+    });
+  });
 });

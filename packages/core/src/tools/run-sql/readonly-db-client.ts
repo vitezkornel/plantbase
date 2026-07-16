@@ -26,7 +26,14 @@ function getPool(): Pool {
     );
   }
 
-  pool = new Pool({ connectionString });
+  // allowExitOnIdle: without it, node-postgres's default idleTimeoutMillis
+  // (10s) keeps the event loop alive for ~10s after every runSql call,
+  // because Fázis 2 deliberately removed a forced process.exit(0) from the
+  // CLI (see apps/cli/src/commands/ask-command.ts) so Node exits naturally
+  // once the event loop drains. This lets the process exit promptly once
+  // connections go idle, without closing the pool mid-session — the pool
+  // is still reused across multiple questions within one interactive run.
+  pool = new Pool({ connectionString, allowExitOnIdle: true });
   return pool;
 }
 
