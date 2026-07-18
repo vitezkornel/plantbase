@@ -6,6 +6,7 @@ import {
   type AgentUsage,
   type SqlCallLogEntry,
 } from '../../logging/jsonl-logger.js';
+import { listCategoriesTool } from '../../tools/list-categories/list-categories-tool.js';
 import {
   RUN_SQL_TOOL_NAME,
   runSqlTool,
@@ -65,7 +66,7 @@ export async function askAgent(
     maxTokens: MAX_TOKENS,
     system: ASK_AGENT_SYSTEM_PROMPT,
     messages,
-    tools: [runSqlTool], // one-line tool registration (konvenciok.md)
+    tools: [runSqlTool, listCategoriesTool], // one-line-per-tool registration (konvenciok.md)
   });
 
   const logPath = await writeInteractionLog({

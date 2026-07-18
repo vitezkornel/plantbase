@@ -48,6 +48,25 @@ function makeToolUsingClient(sql: string, finalText: string): Anthropic {
   return { messages: { create } } as unknown as Anthropic;
 }
 
+/** Simulates one listCategories tool round-trip before the model's final answer. */
+function makeListCategoriesUsingClient(finalText: string): Anthropic {
+  const create = vi
+    .fn()
+    .mockResolvedValueOnce({
+      content: [
+        { type: 'tool_use', id: 'tool_1', name: 'listCategories', input: {} },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 25, output_tokens: 10 },
+    })
+    .mockResolvedValueOnce({
+      content: [{ type: 'text', text: finalText, citations: null }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 15, output_tokens: 6 },
+    });
+  return { messages: { create } } as unknown as Anthropic;
+}
+
 describe('askAgent', () => {
   it('rejects an empty question without calling the model', async () => {
     const client = makeClient('unused');
@@ -110,6 +129,25 @@ describe('askAgent', () => {
     expect(result.messages[1]).toMatchObject({
       role: 'assistant',
       content: [{ type: 'tool_use', name: 'runSql' }],
+    });
+    expect(result.messages[2]).toMatchObject({
+      role: 'user',
+      content: [{ type: 'tool_result', is_error: false }],
+    });
+
+    await rm(result.logPath, { force: true });
+  });
+
+  it('dispatches a listCategories tool_use round-trip and answers from the (mocked) DB result', async () => {
+    const client = makeListCategoriesUsingClient('Ezek a kategóriáink.');
+
+    const result = await askAgent('milyen kategóriák vannak?', { client });
+
+    expect(result.answer).toBe('Ezek a kategóriáink.');
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages[1]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'tool_use', name: 'listCategories' }],
     });
     expect(result.messages[2]).toMatchObject({
       role: 'user',
