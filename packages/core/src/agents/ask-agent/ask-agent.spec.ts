@@ -9,7 +9,7 @@ import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 // runSql-tool wiring (Zod schema + guard) end to end. The live-DB proof
 // that the guard AND the DB role both hold lives in
 // tools/run-sql/run-sql-tool.spec.ts's integration tests instead.
-vi.mock('../../tools/run-sql/readonly-db-client.js', () => ({
+vi.mock('../../tools/readonly-db-client.js', () => ({
   runReadonlyQuery: vi.fn().mockResolvedValue({
     rows: [{ id: 1, name: 'Teszt Növény' }],
     rowCount: 1,

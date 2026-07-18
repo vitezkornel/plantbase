@@ -92,7 +92,7 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
   it('rejects non-string sql input via Zod without touching the DB client module', async () => {
     vi.resetModules();
     const dbClientSpy = vi.fn();
-    vi.doMock('./readonly-db-client.js', () => ({
+    vi.doMock('../readonly-db-client.js', () => ({
       runReadonlyQuery: dbClientSpy,
     }));
 
@@ -101,14 +101,14 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
     expect(outcome.ok).toBe(false);
     expect(dbClientSpy).not.toHaveBeenCalled();
-    vi.doUnmock('./readonly-db-client.js');
+    vi.doUnmock('../readonly-db-client.js');
     vi.resetModules();
   });
 
   it('rejects an empty sql string via Zod without touching the DB', async () => {
     vi.resetModules();
     const dbClientSpy = vi.fn();
-    vi.doMock('./readonly-db-client.js', () => ({
+    vi.doMock('../readonly-db-client.js', () => ({
       runReadonlyQuery: dbClientSpy,
     }));
 
@@ -117,14 +117,14 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
     expect(outcome.ok).toBe(false);
     expect(dbClientSpy).not.toHaveBeenCalled();
-    vi.doUnmock('./readonly-db-client.js');
+    vi.doUnmock('../readonly-db-client.js');
     vi.resetModules();
   });
 
   it('rejects missing sql field via Zod without touching the DB', async () => {
     vi.resetModules();
     const dbClientSpy = vi.fn();
-    vi.doMock('./readonly-db-client.js', () => ({
+    vi.doMock('../readonly-db-client.js', () => ({
       runReadonlyQuery: dbClientSpy,
     }));
 
@@ -133,14 +133,14 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
     expect(outcome.ok).toBe(false);
     expect(dbClientSpy).not.toHaveBeenCalled();
-    vi.doUnmock('./readonly-db-client.js');
+    vi.doUnmock('../readonly-db-client.js');
     vi.resetModules();
   });
 
   it('rejects a mutating statement via the guard without touching the DB', async () => {
     vi.resetModules();
     const dbClientSpy = vi.fn();
-    vi.doMock('./readonly-db-client.js', () => ({
+    vi.doMock('../readonly-db-client.js', () => ({
       runReadonlyQuery: dbClientSpy,
     }));
 
@@ -151,14 +151,14 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
     expect(outcome.ok).toBe(false);
     expect(dbClientSpy).not.toHaveBeenCalled();
-    vi.doUnmock('./readonly-db-client.js');
+    vi.doUnmock('../readonly-db-client.js');
     vi.resetModules();
   });
 
   it('rejects the CTE-write-bypass via the guard without touching the DB', async () => {
     vi.resetModules();
     const dbClientSpy = vi.fn();
-    vi.doMock('./readonly-db-client.js', () => ({
+    vi.doMock('../readonly-db-client.js', () => ({
       runReadonlyQuery: dbClientSpy,
     }));
 
@@ -169,14 +169,14 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
     expect(outcome.ok).toBe(false);
     expect(dbClientSpy).not.toHaveBeenCalled();
-    vi.doUnmock('./readonly-db-client.js');
+    vi.doUnmock('../readonly-db-client.js');
     vi.resetModules();
   });
 
   it('rejects stacked statements via the guard without touching the DB', async () => {
     vi.resetModules();
     const dbClientSpy = vi.fn();
-    vi.doMock('./readonly-db-client.js', () => ({
+    vi.doMock('../readonly-db-client.js', () => ({
       runReadonlyQuery: dbClientSpy,
     }));
 
@@ -187,7 +187,7 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
     expect(outcome.ok).toBe(false);
     expect(dbClientSpy).not.toHaveBeenCalled();
-    vi.doUnmock('./readonly-db-client.js');
+    vi.doUnmock('../readonly-db-client.js');
     vi.resetModules();
   });
 });
@@ -199,7 +199,7 @@ describe('executeRunSql — input validation and guard (DB never reached on reje
 
 describe('runSql — live DATABASE_URL_READONLY integration', () => {
   afterAll(async () => {
-    const { closeReadonlyPool } = await import('./readonly-db-client.js');
+    const { closeReadonlyPool } = await import('../readonly-db-client.js');
     await closeReadonlyPool();
   });
 
@@ -218,7 +218,7 @@ describe('runSql — live DATABASE_URL_READONLY integration', () => {
   });
 
   it('the plantbase_readonly role itself rejects a mutating query, even if called directly (guard-bypass simulation, defense in depth)', async () => {
-    const { runReadonlyQuery } = await import('./readonly-db-client.js');
+    const { runReadonlyQuery } = await import('../readonly-db-client.js');
 
     // Deliberately bypasses guardReadOnlySql to prove layer (b): the DB
     // role is an independent backstop, not just "trust the guard".
@@ -231,7 +231,7 @@ describe('runSql — live DATABASE_URL_READONLY integration', () => {
   });
 
   it('the DB/protocol layer itself rejects a stacked statement, even if called directly (guard-bypass simulation, defense in depth)', async () => {
-    const { runReadonlyQuery } = await import('./readonly-db-client.js');
+    const { runReadonlyQuery } = await import('../readonly-db-client.js');
 
     // Deliberately bypasses guardReadOnlySql's semicolon check to prove
     // the extended-query-protocol backstop documented in
