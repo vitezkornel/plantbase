@@ -9,7 +9,7 @@ import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 // runSql-tool wiring (Zod schema + guard) end to end. The live-DB proof
 // that the guard AND the DB role both hold lives in
 // tools/run-sql/run-sql-tool.spec.ts's integration tests instead.
-vi.mock('../../tools/run-sql/readonly-db-client.js', () => ({
+vi.mock('../../tools/readonly-db-client.js', () => ({
   runReadonlyQuery: vi.fn().mockResolvedValue({
     rows: [{ id: 1, name: 'Teszt Növény' }],
     rowCount: 1,
@@ -39,6 +39,25 @@ function makeToolUsingClient(sql: string, finalText: string): Anthropic {
       ],
       stop_reason: 'tool_use',
       usage: { input_tokens: 30, output_tokens: 12 },
+    })
+    .mockResolvedValueOnce({
+      content: [{ type: 'text', text: finalText, citations: null }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 15, output_tokens: 6 },
+    });
+  return { messages: { create } } as unknown as Anthropic;
+}
+
+/** Simulates one listCategories tool round-trip before the model's final answer. */
+function makeListCategoriesUsingClient(finalText: string): Anthropic {
+  const create = vi
+    .fn()
+    .mockResolvedValueOnce({
+      content: [
+        { type: 'tool_use', id: 'tool_1', name: 'listCategories', input: {} },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 25, output_tokens: 10 },
     })
     .mockResolvedValueOnce({
       content: [{ type: 'text', text: finalText, citations: null }],
@@ -110,6 +129,25 @@ describe('askAgent', () => {
     expect(result.messages[1]).toMatchObject({
       role: 'assistant',
       content: [{ type: 'tool_use', name: 'runSql' }],
+    });
+    expect(result.messages[2]).toMatchObject({
+      role: 'user',
+      content: [{ type: 'tool_result', is_error: false }],
+    });
+
+    await rm(result.logPath, { force: true });
+  });
+
+  it('dispatches a listCategories tool_use round-trip and answers from the (mocked) DB result', async () => {
+    const client = makeListCategoriesUsingClient('Ezek a kategóriáink.');
+
+    const result = await askAgent('milyen kategóriák vannak?', { client });
+
+    expect(result.answer).toBe('Ezek a kategóriáink.');
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages[1]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'tool_use', name: 'listCategories' }],
     });
     expect(result.messages[2]).toMatchObject({
       role: 'user',

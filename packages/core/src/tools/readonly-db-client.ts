@@ -1,4 +1,4 @@
-// packages/core/src/tools/run-sql/readonly-db-client.ts
+// packages/core/src/tools/readonly-db-client.ts
 //
 // architektura.md #2: "Az agent runSql-je READ-ONLY kapcsolaton fut
 // (DATABASE_URL_READONLY), csak SELECT. ... Az agent NEM Prismán kérdez."
@@ -8,9 +8,13 @@
 // independently — see packages/db/src/lib/readonly-role.spec.ts, which
 // proves this exact role/connection is genuinely SELECT-only and is the
 // pattern this module follows, without importing that package's code).
+//
+// Lives one level above any specific tool (konvenciok.md: "a közös kód
+// eggyel kintebb lakik") because both `run-sql/` and `list-categories/`
+// share this one read-only connection/pool — it isn't specific to either.
 
 import { Pool } from 'pg';
-import '../../config/env.js';
+import '../config/env.js';
 
 let pool: Pool | undefined;
 

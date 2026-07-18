@@ -9,7 +9,7 @@
 // fogalom = egy könyvtár, benne MINDEN hozzávalója").
 
 import type { AgentTool, ToolOutcome } from '../tool-outcome.js';
-import { runReadonlyQuery } from './readonly-db-client.js';
+import { runReadonlyQuery } from '../readonly-db-client.js';
 import { RunSqlInputSchema } from './run-sql-schema.js';
 import { guardReadOnlySql } from './sql-guard.js';
 
