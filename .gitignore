@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.mcp.json
 logs/
 .nx/cache/
 .nx/workspace-data/
