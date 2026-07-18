@@ -13,6 +13,16 @@
         "postgresql://plantbase_readonly:your-readonly-password-here@localhost:5432/plantbase"
       ],
       "env": {}
+    },
+    "prisma": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "prisma",
+        "mcp"
+      ],
+      "env": {}
     }
   }
 }
