@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Ez a fájl útmutatást ad a Claude Code (claude.ai/code) számára az ebben a repóban végzett munkához.
 
 ## Fontos, kézzel felvett szabályok (ne töröld /init futtatásakor!)
 
