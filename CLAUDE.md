@@ -7,20 +7,20 @@ Ez a fájl útmutatást ad a Claude Code (claude.ai/code) számára az ebben a r
 - Valahányszor új MCP-szervert adunk hozzá a `.mcp.json`-hoz, mindig frissítsd vele a `.mcp.json.example` sablont is.
 - Valahányszor a `docs/system-prompt.md` módosul, mindig frissítsd vele szinkronban a ténylegesen futásidejű `.ts` mirror-fájl (`packages/core/src/agents/ask-agent/ask-agent-prompt.ts`) tartalmát is, automatikusan, kérés nélkül.
 
-## Project overview
+## Projekt-áttekintés
 
-Plantbase is a CLI AI agent that translates a natural-language question into SQL over a plant-catalog `products` table, runs it read-only, and answers in Hungarian — no SQL knowledge required from the user. See `README.md` for the full functional overview and setup walkthrough, and `docs/system-prompt.md` for the agent's exact system prompt.
+A Plantbase egy CLI AI agent, amely a felhasználó természetes nyelvű kérdését SQL-re fordítja egy növény-katalógus (`products` tábla) felett, read-only lefuttatja, és magyarul válaszol — a felhasználónak nincs szüksége SQL-tudásra. A teljes funkcionális áttekintésért és a beüzemelési lépésekért lásd a `README.md`-t, az agent pontos system promptjáért pedig a `docs/system-prompt.md`-t.
 
-## Commands
+## Parancsok
 
-### Environment setup (one-time)
+### Környezet felállítása (egyszeri lépés)
 
 ```bash
 pnpm install
-cp .env.example .env   # fill in ANTHROPIC_API_KEY at minimum
-docker compose up -d   # starts Postgres (container: plantbase-postgres)
+cp .env.example .env   # legalább az ANTHROPIC_API_KEY-t töltsd ki
+docker compose up -d   # elindítja a Postgres-t (konténer: plantbase-postgres)
 
-# Create the read-only plantbase_readonly Postgres role (idempotent):
+# Létrehozza a read-only plantbase_readonly Postgres role-t (idempotens):
 docker exec -i plantbase-postgres psql -U plantbase -d plantbase \
   -v pw="$POSTGRES_READONLY_PASSWORD" -f /dev/stdin < packages/db/sql/create-readonly-role.sql
 
@@ -28,40 +28,40 @@ pnpm --filter db exec prisma migrate deploy
 pnpm --filter db exec prisma db seed
 ```
 
-### Build & run
+### Build és futtatás
 
 ```bash
-pnpm nx build cli                                    # builds apps/cli/dist/main.js
-node apps/cli/dist/main.js ask "<question>"          # one-shot
-node apps/cli/dist/main.js ask                       # interactive (readline; "exit" to quit)
-node apps/cli/dist/main.js ask --show-prompt "<q>"   # also prints system prompt + full message array
+pnpm nx build cli                                    # lebuildeli az apps/cli/dist/main.js-t
+node apps/cli/dist/main.js ask "<kérdés>"            # egyszeri lekérdezés
+node apps/cli/dist/main.js ask                       # interaktív (readline; "exit"-tel lépsz ki)
+node apps/cli/dist/main.js ask --show-prompt "<k>"   # a system promptot + a teljes üzenet-tömböt is kiírja
 ```
 
-### Test / lint / typecheck
+### Teszt / lint / típusellenőrzés
 
 ```bash
-pnpm nx run-many -t test                                          # full suite, all 3 projects
-pnpm nx test core                                                 # one project (core | db | cli)
-pnpm nx test core -- src/tools/list-categories/list-categories-tool.spec.ts  # single test file
-pnpm nx run-many -t lint,typecheck                                 # workspace-wide
+pnpm nx run-many -t test                                          # teljes tesztsuite, mindhárom projekt
+pnpm nx test core                                                 # egy projekt (core | db | cli)
+pnpm nx test core -- src/tools/list-categories/list-categories-tool.spec.ts  # egyetlen tesztfájl
+pnpm nx run-many -t lint,typecheck                                 # az egész workspace-re
 ```
 
-`tools/run-sql` and `tools/list-categories` in `packages/core`, and `readonly-role.spec.ts` in `packages/db`, include **live** integration tests against `DATABASE_URL_READONLY` — the compose Postgres container must be up, migrated, and seeded for these to pass (they are not mocked).
+A `packages/core` `tools/run-sql` és `tools/list-categories` mappája, valamint a `packages/db` `readonly-role.spec.ts` fájlja **élő** integrációs teszteket is tartalmaz a `DATABASE_URL_READONLY` ellen — ezek sikeréhez a compose Postgres konténernek futnia kell, migrálva és seedelve (nincsenek mockolva).
 
-## Architecture
+## Architektúra
 
-Nx monorepo (pnpm workspaces), 3 independently buildable/testable projects: `core`, `db`, `cli`.
+Nx monorepo (pnpm workspace-ek), 3, egymástól függetlenül buildelhető/tesztelhető projekt: `core`, `db`, `cli`.
 
-- **`packages/core`** — the agent.
-  - `agents/agent-loop.ts` — hand-written (no agent framework) Anthropic tool-use loop: calls the model, dispatches any `tool_use` blocks to the matching entry in the `tools` array by name (the array passed in *is* the dispatch table — no separate central registry), appends `tool_result`s, repeats up to `MAX_ITERATIONS` (6).
-  - `agents/ask-agent/ask-agent.ts` — `askAgent(question)`, the product-facing entry point. Wires the system prompt and registered tools (`runSqlTool`, `listCategoriesTool`) into the loop, writes a JSONL interaction log via `logging/jsonl-logger.ts`, and returns plain data (answer, full message array, system prompt, usage) — framework/I/O-agnostic, so any caller (today `apps/cli`) just prints the result.
-  - `agents/ask-agent/ask-agent-prompt.ts` — a byte-for-byte mirror of `docs/system-prompt.md`'s XML content. Keeping these in sync is a manual convention (see the house rule above), not enforced by a test.
-  - `tools/tool-outcome.ts` — the shared `AgentTool` / `ToolOutcome` shape every tool implements; this is what makes registering a new tool a one-line addition to the `tools` array in `ask-agent.ts` instead of a central dispatch table to maintain.
-  - `tools/readonly-db-client.ts` — the one shared `pg` `Pool` against `DATABASE_URL_READONLY`, reused by every tool that needs read-only DB access (currently `run-sql` and `list-categories`).
-  - `tools/run-sql/` — the `runSql` tool: the model's own SQL, validated by `sql-guard.ts` (a keyword-scan guard that only allows a single SELECT/WITH statement — rejects stacked statements and data-modifying CTE bypasses) before it ever reaches the DB.
-  - `tools/list-categories/` — the `listCategories` tool: one fixed `SELECT DISTINCT category FROM products` query, no model-generated SQL, so no guard is needed.
-  - Each tool's own directory holds everything specific to it (schema, guard if any, spec); anything shared by more than one tool lives one directory up instead of being duplicated per tool.
-- **`packages/db`** — owns the **read-write** `DATABASE_URL` connection: Prisma schema, migrations, and seed (`prisma.config.ts` — Prisma 7's config-based seed hook, not a `package.json` `"prisma"` key; must be run with cwd = `packages/db`, e.g. via `pnpm --filter db exec prisma ...`). `sql/create-readonly-role.sql` provisions the separate read-only Postgres role that `packages/core` connects with directly.
-- **`apps/cli`** — commander-based I/O surface only (`ask` command, one-shot or interactive); no business logic beyond wiring stdin/argv to `askAgent` and printing its plain-data result.
+- **`packages/core`** — az agent.
+  - `agents/agent-loop.ts` — kézzel írt (agent-framework nélküli) Anthropic tool-use loop: meghívja a modellt, minden `tool_use` blokkot név szerint a `tools` tömb megfelelő elemére dispatchol (a bekötött tömb maga a dispatch-tábla — nincs külön központi registry), hozzáfűzi a `tool_result`-okat, és ezt ismétli a `MAX_ITERATIONS`-ig (6).
+  - `agents/ask-agent/ask-agent.ts` — `askAgent(question)`, a termék felé mutató belépési pont. Bekötti a system promptot és a regisztrált toolokat (`runSqlTool`, `listCategoriesTool`) a loopba, a `logging/jsonl-logger.ts`-en keresztül JSONL interakció-logot ír, és nyers adatot ad vissza (válasz, teljes üzenet-tömb, system prompt, token-használat) — framework/I/O-független, így bármelyik hívó (ma az `apps/cli`) egyszerűen csak kiírja az eredményt.
+  - `agents/ask-agent/ask-agent-prompt.ts` — a `docs/system-prompt.md` XML-tartalmának szó szerinti mirror-ja. A kettő szinkronban tartása kézi konvenció (lásd a fenti házirend-szabályt), nem tesztelt automatikusan.
+  - `tools/tool-outcome.ts` — a megosztott `AgentTool` / `ToolOutcome` forma, amit minden tool implementál; ez teszi lehetővé, hogy egy új tool regisztrálása csak egysoros bővítés legyen az `ask-agent.ts` `tools` tömbjében, ahelyett hogy egy karbantartandó központi dispatch-táblát kellene vezetni.
+  - `tools/readonly-db-client.ts` — az egyetlen, megosztott `pg` `Pool` a `DATABASE_URL_READONLY` ellen, amit minden read-only DB-hozzáférést igénylő tool újrahasznál (jelenleg a `run-sql` és a `list-categories`).
+  - `tools/run-sql/` — a `runSql` tool: a modell saját maga generálta SQL, amit a `sql-guard.ts` valid (egy kulcsszó-alapú guard, ami csak egyetlen SELECT/WITH statementet enged — elutasítja a stacked statementeket és az adatmódosító CTE-bypasseket), mielőtt egyáltalán eljutna a DB-hez.
+  - `tools/list-categories/` — a `listCategories` tool: egyetlen fix `SELECT DISTINCT category FROM products` lekérdezés, nincs modell-generálta SQL, így guard-ra sincs szükség.
+  - Minden tool saját könyvtára tartalmazza mindazt, ami rá jellemző (séma, guard ha van, teszt); ami több toolnak is kell, az egy szinttel feljebb lakik, ahelyett hogy toolonként duplikálódna.
+- **`packages/db`** — a **read-write** `DATABASE_URL` kapcsolat gazdája: Prisma séma, migrációk és seed (`prisma.config.ts` — a Prisma 7 config-alapú seed-hookja, nem egy `package.json`-beli `"prisma"` kulcs; a futtatáshoz cwd = `packages/db` szükséges, pl. `pnpm --filter db exec prisma ...` formában). Az `sql/create-readonly-role.sql` hozza létre a külön, read-only Postgres role-t, amivel a `packages/core` közvetlenül kapcsolódik.
+- **`apps/cli`** — csak egy commander-alapú I/O-felszín (`ask` parancs, egyszeri vagy interaktív); nincs benne üzleti logika azon túl, hogy az stdin/argv-t bekötti az `askAgent`-be, és kiírja a nyers eredményét.
 
-**Two DB connections, two rights** is the core security invariant: `DATABASE_URL` (read-write, Prisma, used only by `packages/db`) vs. `DATABASE_URL_READONLY` (SELECT-only Postgres role, raw `pg` client, used only by `packages/core`'s tools — never through Prisma). The agent has no code path capable of writing to the database, enforced independently at two layers: the application-level SQL guard (`sql-guard.ts`) and the Postgres role's own grants.
+**Két DB-kapcsolat, két jog** a fő biztonsági alapelv: a `DATABASE_URL` (read-write, Prisma, csak a `packages/db` használja) vs. a `DATABASE_URL_READONLY` (csak SELECT-et engedő Postgres role, nyers `pg` kliens, csak a `packages/core` toolja használja — soha nem Prismán keresztül). Az agentnek nincs olyan kódútja, ami írni tudna az adatbázisba — ezt két, egymástól független rétegen kényszerítjük ki: az alkalmazás-szintű SQL guard (`sql-guard.ts`) és a Postgres role saját jogosultságai.
