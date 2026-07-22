@@ -2,7 +2,9 @@
   "name": "plantbase",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "cli": "nx build cli && node apps/cli/dist/main.js"
+  },
   "private": true,
   "devDependencies": {
     "@eslint/js": "^9.8.0",
