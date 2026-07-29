@@ -51,6 +51,38 @@ describe('stripBoilerplate', () => {
     expect(stripBoilerplate(body)).toBe(body);
   });
 
+  it('removes the recurring "Ask The Sill" column tagline line regardless of exact wording', () => {
+    const body = [
+      '# Some Article',
+      '',
+      '###### From flawlessly introducing a trendy plant to tackling windowless room woes, our plant specialist Chrissy will set you up with the perfect plant pick.',
+      '',
+      '### The actual question',
+      '',
+      'The actual answer content.',
+    ].join('\n');
+
+    const result = stripBoilerplate(body);
+
+    expect(result).not.toContain('will set you up with the perfect plant pick');
+    expect(result).toContain('### The actual question');
+    expect(result).toContain('The actual answer content.');
+  });
+
+  it('removes a differently-worded variant of the same recurring tagline', () => {
+    const body = [
+      '# Some Article',
+      '',
+      '###### From flawlessly introducing a trendy plant to tackling windowless room woes—plant enthusiast and customer happiness team lead Chrissy will set you up with the perfect plant pick.',
+      '',
+      'Real content.',
+    ].join('\n');
+
+    expect(stripBoilerplate(body)).not.toContain(
+      'will set you up with the perfect plant pick',
+    );
+  });
+
   it.each(SAMPLE_FILES)(
     'strips the recurring product/footer boilerplate from %s while keeping real content',
     (fileName) => {
@@ -62,6 +94,7 @@ describe('stripBoilerplate', () => {
       expect(result).not.toContain('Perfect Pairings For Your Plants');
       expect(result).not.toContain('Words By The Sill');
       expect(result).not.toContain('Best Seller');
+      expect(result).not.toContain('will set you up with the perfect plant pick');
       expect(result.length).toBeGreaterThan(0);
       expect(result.length).toBeLessThan(body.length);
     },
