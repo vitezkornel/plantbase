@@ -92,12 +92,18 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.111.0
         version: 0.111.0(zod@4.4.3)
+      cohere-ai:
+        specifier: ^7.19.1
+        version: 7.21.0
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       pg:
         specifier: ^8.22.0
         version: 8.22.0
+      rag:
+        specifier: workspace:*
+        version: link:../rag
       zod:
         specifier: ^4.4.3
         version: 4.4.3

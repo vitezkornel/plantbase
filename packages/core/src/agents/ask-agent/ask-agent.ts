@@ -11,6 +11,7 @@ import {
   RUN_SQL_TOOL_NAME,
   runSqlTool,
 } from '../../tools/run-sql/run-sql-tool.js';
+import { searchKnowledgeTool } from '../../tools/search-knowledge/search-knowledge-tool.js';
 import { runAgentLoop, type ToolCallRecord } from '../agent-loop.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 
@@ -66,7 +67,7 @@ export async function askAgent(
     maxTokens: MAX_TOKENS,
     system: ASK_AGENT_SYSTEM_PROMPT,
     messages,
-    tools: [runSqlTool, listCategoriesTool], // one-line-per-tool registration (konvenciok.md)
+    tools: [runSqlTool, listCategoriesTool, searchKnowledgeTool], // one-line-per-tool registration (konvenciok.md)
   });
 
   const logPath = await writeInteractionLog({

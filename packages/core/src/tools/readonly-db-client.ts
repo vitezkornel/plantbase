@@ -47,24 +47,31 @@ export interface ReadonlyQueryResult {
 }
 
 /**
- * Runs `sql` (already guard-approved — see sql-guard.ts) against the
- * read-only connection and returns its rows.
+ * Runs `sql` against the read-only connection and returns its rows.
  *
- * Passing an (empty) `values` array forces node-postgres's EXTENDED query
- * protocol (Parse/Bind/Execute) instead of the simple query protocol used
- * when `query()` is called with text alone. This is deliberate
- * defense-in-depth beyond sql-guard.ts's own semicolon check: Postgres's
- * extended protocol only ever parses a single statement per Parse message
- * and raises a syntax error ("cannot insert multiple commands into a
- * prepared statement") if the text contains more than one — so even a
- * guard bug that let a stacked statement through would still be rejected
- * here, at the protocol layer, before a second command could ever run.
+ * `values` defaults to an empty array, which forces node-postgres's
+ * EXTENDED query protocol (Parse/Bind/Execute) instead of the simple query
+ * protocol used when `query()` is called with text alone. For
+ * guard-approved, LLM-produced SQL (run-sql/sql-guard.ts) this is
+ * deliberate defense-in-depth beyond the guard's own semicolon check:
+ * Postgres's extended protocol only ever parses a single statement per
+ * Parse message and raises a syntax error ("cannot insert multiple
+ * commands into a prepared statement") if the text contains more than
+ * one — so even a guard bug that let a stacked statement through would
+ * still be rejected here, at the protocol layer, before a second command
+ * could ever run.
+ *
+ * Callers with a FIXED sql string and real bind parameters (e.g.
+ * search-knowledge's vector similarity query) pass `values` explicitly —
+ * this is the intended, safe use of parameterization, not a relaxation of
+ * the defense above (it still goes through the same extended protocol).
  */
 export async function runReadonlyQuery(
   sql: string,
+  values: unknown[] = [],
 ): Promise<ReadonlyQueryResult> {
   const client = getPool();
-  const result = await client.query(sql, []);
+  const result = await client.query(sql, values);
   return {
     rows: result.rows,
     rowCount: result.rowCount ?? result.rows.length,

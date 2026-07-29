@@ -51,6 +51,55 @@ describe('plantbase_readonly role', () => {
     expect(Number(result.rows[0].count)).toBeGreaterThan(0);
   });
 
+  // knowledge_chunks (docs/rag-proposal.md #2): same read-only grant added
+  // for the RAG search-knowledge tool — proves it automatically rather
+  // than only having been checked by hand once during R3.
+  it('can SELECT from knowledge_chunks', async () => {
+    const result = await client.query('SELECT count(*) FROM knowledge_chunks');
+
+    expect(result.rows).toHaveLength(1);
+    expect(Number(result.rows[0].count)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('cannot INSERT into knowledge_chunks', async () => {
+    await client.query('BEGIN');
+    try {
+      const vectorLiteral = `[${Array(1536).fill(0).join(',')}]`;
+      await expect(
+        client.query(
+          `INSERT INTO knowledge_chunks
+             (article_slug, title, source, content, content_hash, embedding)
+           VALUES ('__readonly-role-spec-sentinel__', 'x', 'x', 'x', 'x', $1::vector)`,
+          [vectorLiteral],
+        ),
+      ).rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('cannot UPDATE knowledge_chunks', async () => {
+    await client.query('BEGIN');
+    try {
+      await expect(
+        client.query("UPDATE knowledge_chunks SET title = 'hacked' WHERE id = -1"),
+      ).rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
+  it('cannot DELETE from knowledge_chunks', async () => {
+    await client.query('BEGIN');
+    try {
+      await expect(
+        client.query('DELETE FROM knowledge_chunks WHERE id = -1'),
+      ).rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+
   // The three tests below attempt writes that are *expected* to fail with
   // 42501 (insufficient_privilege). But the whole point of this test is to
   // catch the case where that expectation is wrong and the readonly role
