@@ -302,4 +302,81 @@ bullet-listákkal.
 
 ---
 
+## 10. R2 elején felfedezett harmadik boilerplate-minta: "Ask The Sill" rovat-tagline
+
+**Megfigyelés:** a `chunk-article.ts` tervezése közben (mielőtt a
+heading-alapú vágást megírtam) végignéztem, mi történne egy valós
+`ask-the-sill` kategóriájú cikken (Minta A) a vágás után. A cikk egy
+`###### From flawlessly introducing a trendy plant to tackling windowless
+room woes, our plant specialist Chrissy will set you up with the perfect
+plant pick.` szövegű `######` (h6) sort tartalmaz, közvetlenül a cikk eleje
+felé. Egy `grep` ellenőrzés (`grep -h "^######" data/knowledge/ask-the-sill__*.md`)
+megmutatta, hogy ez a mondat — néhány apró szövegezési változattal (pl.
+"our plant specialist Chrissy" vs. "plant enthusiast and customer happiness
+team lead Chrissy") — **22 különböző `ask-the-sill` cikkben** ismétlődik
+szinte szó szerint. Ez a "Rovat" (Ask The Sill oszlop) leíró mondata, nem az
+adott cikk saját tartalma.
+
+**Probléma, ha nem szűrjük:** a heading-alapú chunkolás (3. pont) minden
+`######` sort saját szekció-határnak tekint — ha ez a tagline egyben marad
+egy szekcióként, 22 különböző cikkben (majdnem) azonos szövegű, önálló
+chunk keletkezne. Ez pontosan ugyanaz a vektortér-hígítási probléma, mint a
+2. pontban leírt "Perfect Pairings"/"Words By The Sill" lábléc: cikk-
+specifikus tartalom nélküli, ismétlődő zaj versenyezne a top-K találatok
+helyéért.
+
+**Fontos megkülönböztetés:** a többi `######` sor a korpuszban (nem
+`ask-the-sill` kategóriában, illetve az `ask-the-sill` cikkek nagy részében
+is) **valódi, cikk-specifikus, egyedi egy-mondatos összefoglaló** (pl. "Sure,
+money doesn't grow on trees, but the Coin Plant... is worth spending some
+time on."), NEM boilerplate — ezeket NEM szabad kiszűrni, sőt önmagukban jó
+chunk-jelöltek (hasonlóan a "At a Glance" bullet-blokkhoz, 4. pont). Emiatt
+nem lehet "minden `######` sort dobj el" szabályt írni; a szűrésnek
+kifejezetten erre az egy, ismétlődő mondatra kell irányulnia.
+
+**Döntés:** a `strip-boilerplate.ts`-t (R1-ben már megírt, ekkor
+visszamenőlegesen kiegészített) egy második szabállyal bővítettem: bármely
+sor, ami tartalmazza a mind a 22 változatban stabilan jelen lévő rész-
+mondatot ("will set you up with the perfect plant pick"), kikerül — nem
+egzakt string-egyezéssel (mert a pontos szöveg cikkenként kicsit eltér),
+hanem ezzel a stabil alszöveg-illesztéssel. Unit teszttel lefedve mindkét
+megfigyelt szövegváltozaton (`strip-boilerplate.spec.ts`).
+
+---
+
+## 11. R3 közben: `embed-multilingual-v3.0` → `embed-v4.0` váltás (Cohere embedding modell)
+
+**Előzmény:** a tervezés (`rag-proposal.md` első verziója) még
+`embed-multilingual-v3.0`-t irányzott elő embedding-modellként — ez volt a
+Cohere multilingual embed-modellje a tervezés idején ismert információk
+alapján.
+
+**Mi történt R3-ban:** a `packages/rag/src/embedding/cohere-embed-client.ts`
+tényleges megírása előtt, `architektura.md` #7 elve szerint ("Library-doksi
+munka előtt ELŐBB beolvassuk a doksit Context7-tel"), lekérdeztem a Cohere
+TypeScript SDK aktuális dokumentációját (`/cohere-ai/cohere-typescript`,
+Context7-n keresztül) az embed-hívás pontos szintaxisára. **Minden egyes
+visszaadott kódpélda és API-referencia kizárólag `embed-v4.0`-t használt
+modellnévként** — az `embed-multilingual-v3.0` egyetlen aktuális
+kódpéldában, referenciában vagy request-példában sem szerepelt.
+
+**Döntés:** a tervben szereplő `embed-multilingual-v3.0`-t lecseréltem
+`embed-v4.0`-ra. Indoklás: ez a Cohere SDK aktuálisan dokumentált,
+referenciapéldákban következetesen használt embedding-modellje — a
+korábbi terv egy, a tervezés idején ismert, de a build idejére már nem az
+elsődlegesen dokumentált modellnévre épült. A modell multilingual
+képessége (szükséges a magyar kérdés / angol korpusz keresztnyelvi
+egyezéshez, ld. `rag-proposal.md` #6) a Cohere embed-modellcsalád v3 óta
+adott tulajdonsága, ez a váltással nem veszett el — csak a konkrét
+modell-verziónevet frissítettem az aktuálisan dokumentáltra.
+
+**Ehhez kapcsolódó, még nyitott pont** (ld. `rag-proposal.md` #2, #4): a
+telepített `cohere-ai` SDK `EmbedRequest` típusában nincs dimenzió-override
+mező, így a tényleges kimeneti vektor-dimenzió (feltételezésünk szerint
+1536, embed-v4.0 dokumentált alapértéke) **nincs valós API-hívással
+megerősítve** — ehhez érvényes `COHERE_API_KEY` kell, ami még nem áll
+rendelkezésre. Ez az R4 (teljes ingest) előtti kötelező ellenőrzőpont.
+
+---
+
 ## (ide jönnek a következő döntések...)
