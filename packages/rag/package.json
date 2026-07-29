@@ -13,6 +13,9 @@
     },
     "./package.json": "./package.json"
   },
+  "scripts": {
+    "ingest": "tsx src/ingest/run-ingest-cli.ts"
+  },
   "dependencies": {
     "cohere-ai": "^7.19.1",
     "dotenv": "^17.4.2",
@@ -20,6 +23,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.20.6"
   }
 }

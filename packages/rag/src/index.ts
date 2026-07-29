@@ -19,3 +19,8 @@ export {
   closeWritePool,
   type KnowledgeChunkRecord,
 } from './storage/write-knowledge-chunks.js';
+export {
+  runIngest,
+  type IngestDeps,
+  type IngestSummary,
+} from './ingest/run-ingest.js';

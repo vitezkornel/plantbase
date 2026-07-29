@@ -46,12 +46,30 @@ node apps/cli/dist/main.js ask "Milyen kaktuszaitok vannak?"
 node apps/cli/dist/main.js ask
 ```
 
+## RAG-tudásbázis ingest (HF3, `packages/rag`)
+
+A `data/knowledge/` alatti 202 gondozási cikk chunkolása + embeddelése +
+pgvector-be írása egy külön batch-job, nem fut le automatikusan a fenti
+lépésekkel. Lásd a teljes tervet: `docs/rag-proposal.md`.
+
+```bash
+# Előfeltétel: .env-ben COHERE_API_KEY kitöltve (https://dashboard.cohere.com/api-keys)
+# és a 3-5. lépés (Postgres + migráció) már lefutott.
+
+pnpm --filter rag run ingest
+```
+
+Ez valós Cohere API-hívásokat indít (kb. 202 hívás, cikkenként egy,
+összesen kb. 1500+ chunkra) — költséggel jár, ld. a README
+költségbecslés-szakaszát (később).
+
 ## Architektúra
 
-Nx monorepo (pnpm), három projekt:
+Nx monorepo (pnpm), négy projekt:
 
 - **`packages/core`** — az agent-logika: `agents/ask-agent` (system prompt + agent-loop), `tools/run-sql` és `tools/list-categories` (a két, agentnek regisztrált tool), közös kód (`tool-outcome.ts`, `readonly-db-client.ts`) egy szinttel feljebb.
-- **`packages/db`** — Prisma séma, migráció, seed; a **read-write** DB-kapcsolatot birtokolja.
+- **`packages/db`** — Prisma séma, migráció, seed; a **read-write** DB-kapcsolatot birtokolja (a `products` katalógus és a RAG `knowledge_chunks` táblája is itt kap sémát).
+- **`packages/rag`** — a RAG-tudásbázis ingest-oldala: cikk-parsolás, boilerplate-szűrés, heading-alapú chunkolás, Cohere embedding, pgvector-írás. Lásd `docs/rag-proposal.md`.
 - **`apps/cli`** — a parancssori felület (commander), csak I/O-réteg `packages/core` felett.
 
 **Két DB-kapcsolat, két jog**: `DATABASE_URL` (read-write, Prisma migrate/seed, `packages/db`) és `DATABASE_URL_READONLY` (csak SELECT, a `plantbase_readonly` role-lal, közvetlen `pg` klienssel — NEM Prismán keresztül — az agent `runSql`/`listCategories` toolja ezt használja). A kettő szándékosan el van választva: az agentnek fizikailag nincs lehetősége írni az adatbázisba, még egy prompt-injection vagy guard-hiba esetén sem.
