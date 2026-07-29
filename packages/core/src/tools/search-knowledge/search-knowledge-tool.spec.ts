@@ -29,10 +29,17 @@ interface SearchKnowledgeResult {
 }
 
 describe('executeSearchKnowledge — live DATABASE_URL_READONLY + write path integration', () => {
-  it('returns the vector-closest chunk first, ahead of a far chunk, after rerank', async () => {
+  it('returns the vector-closest chunk first after rerank, against the live (now real-data-populated) table', async () => {
+    // The query embedding is set to be IDENTICAL to this row's stored
+    // embedding (distance 0) — the single closest possible match by
+    // construction, guaranteed to rank first regardless of how much real
+    // ingested data (1552+ rows as of R4) also lives in knowledge_chunks.
+    // An earlier version of this test asserted a "close" row ranked ahead
+    // of a "far" row among the top-20 candidates — that broke once the
+    // real ingest ran, because a merely-far synthetic vector is no longer
+    // guaranteed to beat 1552 real embeddings into the top-20 cut.
     const articleSlug = `test-search-${randomUUID()}`;
     const closeVector = unitVector(0);
-    const farVector = unitVector(1);
 
     await writeKnowledgeChunks([
       {
@@ -42,14 +49,6 @@ describe('executeSearchKnowledge — live DATABASE_URL_READONLY + write path int
         sectionPath: 'Section',
         content: 'Close content about Meyer lemons.',
         embedding: closeVector,
-      },
-      {
-        articleSlug,
-        title: 'Far Article',
-        source: 'https://example.com/far',
-        sectionPath: 'Section',
-        content: 'Far content about something unrelated.',
-        embedding: farVector,
       },
     ]);
 
@@ -79,16 +78,8 @@ describe('executeSearchKnowledge — live DATABASE_URL_READONLY + write path int
         throw new Error('expected ok outcome');
       }
       const data = outcome.data as { results: SearchKnowledgeResult[] };
-      const ownResults = data.results.filter((r) =>
-        r.source.includes('example.com/close') ||
-        r.source.includes('example.com/far'),
-      );
-      expect(ownResults.length).toBeGreaterThanOrEqual(2);
-      const closeIndex = ownResults.findIndex((r) => r.title === 'Close Article');
-      const farIndex = ownResults.findIndex((r) => r.title === 'Far Article');
-      expect(closeIndex).toBeGreaterThanOrEqual(0);
-      expect(farIndex).toBeGreaterThanOrEqual(0);
-      expect(closeIndex).toBeLessThan(farIndex);
+      expect(data.results[0]?.title).toBe('Close Article');
+      expect(data.results[0]?.source).toBe('https://example.com/close');
 
       expect(fakeGenerateHyde).toHaveBeenCalledWith('Meyer citromfa gondozása');
       expect(fakeEmbed).toHaveBeenCalledWith(
