@@ -69,6 +69,58 @@ API-hívással megerősítve: 1536). Egy valós, végponttól-végpontig lekérd
 5 legjobb találatot a "How To Care for a Meyer Lemon" cikk releváns
 szekcióiból adta vissza, 0.87–0.93 relevancia-score-okkal.
 
+## Költségbecslés (HF3, 6. pont)
+
+Az árazás forrása: Cohere hivatalos árlista (embed-v4.0: $0.12/1M token;
+rerank-v4.0-pro: $0.0025/keresés — 1 keresés = 1 query + max 100 dokumentum,
+dokumentumonként max ~500 tokenig, afölött a dokumentum több keresésnek
+számít) és az Anthropic hivatalos árlistája (Claude Sonnet 5: $2.00/1M
+input, $10.00/1M output — bevezető ár 2026.08.31-ig; Claude Haiku 4.5:
+$1.00/1M input, $5.00/1M output). Ahol volt rá mód, **valós, mért adatból**
+számoltunk, nem csak becslésből — az egyes tételeknél jelezve, melyik melyik.
+
+### A teljes ingest költsége (202 cikk → 1552 chunk)
+
+**Valós, mért adat:** a `knowledge_chunks` táblában ténylegesen tárolt
+1552 chunk összesen **828 306 karaktert** tesz ki (`SELECT
+sum(length(content))`) — ez pontosan az a szöveg, amit a 202 (cikkenkénti)
+Cohere embed-hívás ténylegesen beágyazott.
+
+**Becsült token-szám** (a karakterszámból, ~4 karakter/token angol
+szövegre — szokásos ökölszabály, mert a Cohere tokenizálója nem publikus
+API-n keresztül elérhető ehhez a modellhez): kb. **207 000 token**.
+
+| Tétel | Mennyiség | Ár | Költség |
+|---|---|---|---|
+| Cohere embed-v4.0 (202 hívás, 1552 chunk) | ~207 000 token | $0.12 / 1M token | **~$0.025** (~2,5 cent) |
+
+A teljes tudásbázis vektorizálása tehát **nagyságrendileg 2-3 amerikai
+cent** — a Cohere embedding ára ennél a korpuszméretnél elhanyagolható.
+
+### Egy kérdés költsége a teljes pipeline-nal (HyDE + embedding + rerank + válasz)
+
+| Lépés | Adat forrása | Token/egység | Ár | Költség |
+|---|---|---|---|---|
+| HyDE (Claude Haiku 4.5) | **valós mérés**, 3 kérdés átlaga | ~197 input + ~117 output token | $1.00 / $5.00 per 1M | **~$0.0008** |
+| Query embedding (Cohere embed-v4.0) | becsült (HyDE-bekezdés hossza) | ~117 token | $0.12 / 1M | **~$0.00001** |
+| Rerank (Cohere rerank-v4.0-pro) | valós hívásszám | 1 keresés (20 jelölt, mind <500 token) | $0.0025 / keresés | **$0.0025** |
+| Végső válasz (Claude Sonnet 5, `askAgent`) | **valós, naplózott mérés** (`logs/2026-07-29T19-44-55-265Z.jsonl`, a Q8 negatív teszt) | 9231 input + 624 output token | $2.00 / $10.00 per 1M | **~$0.0247** |
+| **Összesen** | | | | **~$0.028** (~2,8 cent) |
+
+**Megjegyzés a végső válasz-tételhez:** ez egyetlen valós, teljes
+agent-interakcióból származik (a HyDE+rerank+searchKnowledge tool-hívás +
+a végső válaszadás, a `runAgentLoop` két Claude Sonnet-hívásán át) — a
+system prompt és mindhárom tool-definíció (runSql, listCategories,
+searchKnowledge) minden iterációban újraküldve, ez adja a viszonylag magas
+input-token-számot. Egyszerűbb (kevesebb tool-visszatérésű) kérdéseknél ez
+alacsonyabb is lehet.
+
+**Érdekesség:** egy kérdés teljes pipeline-költsége (~$0.028) nagyságrendileg
+**egyezik a teljes 202 cikkes ingest költségével** (~$0.025) — ennek oka,
+hogy a Cohere embedding ára rendkívül alacsony a Claude generálási
+áraihoz képest, így a válaszgenerálás (nem a keresés) a domináns
+költségtényező egy kérdésnél.
+
 ## Architektúra
 
 Nx monorepo (pnpm), négy projekt:
