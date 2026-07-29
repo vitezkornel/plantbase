@@ -8,13 +8,10 @@ import '../config/env.js';
 // NOTE: the installed cohere-ai SDK's EmbedRequest type has no dimension
 // override field (checked directly in node_modules — no `outputDimension`
 // or similar), so the output dimension is whatever embed-v4.0's server-side
-// default is (assumed 1536, matching Cohere's published default for this
-// model — NOT yet confirmed against a real API response, since no
-// COHERE_API_KEY was available while writing this). The pgvector column
-// (packages/db/prisma/schema.prisma KnowledgeChunk.embedding) is sized to
-// match this assumption; verify actual vector length against a real
-// embedTexts() call before the R4 full ingest run, and adjust the column
-// (new migration) if it doesn't match.
+// default is. CONFIRMED against a real embedTexts() call (a valid
+// COHERE_API_KEY became available after this was first written): 1536,
+// matching the pgvector column size (packages/db/prisma/schema.prisma
+// KnowledgeChunk.embedding) already in place.
 const EMBED_MODEL = 'embed-v4.0';
 
 export type EmbedInputType = 'search_document' | 'search_query';

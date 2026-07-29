@@ -370,12 +370,11 @@ egyezéshez, ld. `rag-proposal.md` #6) a Cohere embed-modellcsalád v3 óta
 adott tulajdonsága, ez a váltással nem veszett el — csak a konkrét
 modell-verziónevet frissítettem az aktuálisan dokumentáltra.
 
-**Ehhez kapcsolódó, még nyitott pont** (ld. `rag-proposal.md` #2, #4): a
-telepített `cohere-ai` SDK `EmbedRequest` típusában nincs dimenzió-override
-mező, így a tényleges kimeneti vektor-dimenzió (feltételezésünk szerint
-1536, embed-v4.0 dokumentált alapértéke) **nincs valós API-hívással
-megerősítve** — ehhez érvényes `COHERE_API_KEY` kell, ami még nem áll
-rendelkezésre. Ez az R4 (teljes ingest) előtti kötelező ellenőrzőpont.
+**Utólagos megerősítés (R4 előtt, miután érvényes `COHERE_API_KEY` került
+a `.env`-be):** egy valós `embedTexts(['test sentence for dimension
+check'], 'search_document')` hívás 1536 elemű vektort adott vissza — a
+feltételezés helyesnek bizonyult, a pgvector oszlop mérete (`vector(1536)`)
+nem igényelt módosítást a teljes ingest előtt.
 
 ---
 

@@ -99,14 +99,13 @@ model KnowledgeChunk {
 
 - `vector(1536)`: a Cohere `embed-v4.0` (ld. 4. pont — a modellnév a build
   közben, Context7-tel ellenőrzött, akkor aktuális névre frissült, az eredeti
-  `embed-multilingual-v3.0` tervet felülírva) feltételezett alapértelmezett
-  dimenziója. A telepített `cohere-ai` SDK `EmbedRequest` típusában NINCS
-  dimenzió-override mező (ellenőrizve a `node_modules`-ban), tehát a tényleges
-  méret az API szerver-oldali alapértelmezése — ezt **nem sikerült valós
-  API-hívással megerősíteni** (nem volt érvényes `COHERE_API_KEY` az
-  implementáció idején). **R4 előtt kötelező ellenőrizni** egy valós
-  `embedTexts(...)` hívás visszatérési vektor-hosszával, és ha eltér, új
-  migrációval igazítani az oszlopot.
+  `embed-multilingual-v3.0` tervet felülírva) alapértelmezett dimenziója. A
+  telepített `cohere-ai` SDK `EmbedRequest` típusában NINCS dimenzió-override
+  mező (ellenőrizve a `node_modules`-ban), tehát a tényleges méret az API
+  szerver-oldali alapértelmezése — ezt eredetileg feltételezésként vettük
+  fel (nem volt érvényes `COHERE_API_KEY` az implementáció idején), majd
+  **valós `embedTexts(...)` hívással megerősítettük: 1536**, pontosan
+  egyezik az oszlop méretével, migráció nem szükséges.
 - `contentHash`: most még nincs mögötte logika (a HF3 5. pontja szerint az
   inkrementális frissítés csak `docs/ARCHITEKTURA.md`-ben terv, nem kód) — de
   a mező felvétele most nulla költség, és előkészíti azt a történetet.
