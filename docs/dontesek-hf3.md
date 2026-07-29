@@ -252,4 +252,54 @@ kerül: `packages/rag`. NEM a `packages/core`-ba (az agent-csomag) és NEM a
 
 ---
 
+## 9. R2 közben felfedezett hiba a 6. pontban jóváhagyott heurisztikában — javítás
+
+**Probléma:** a 6. pontban (és a tervezés során jóváhagyott) heurisztika —
+"minden listaelem hasonló hosszú ÉS vastagon szedett névvel kezdődik VAGY a
+cikk címe 'N legjobb/top N' mintát követ" — a `chunk-article.ts` tényleges
+megírásakor megbukott a saját Minta B-nkön: a "Steps to pot your plant"
+szekció (`care-miscellaneous__grow-pot.md`) IS bold-számozott elemekből áll
+(`**1. Remove plant from nursery grow pot**`, ..., `**6. Water and
+enjoy**`), hasonló hosszúságúak — a heurisztika szó szerint ezt is
+"független listának" minősítette volna, holott ez pont az a lépéssor,
+amit a 3. pont szerint EGYBEN kell tartani. A bold-formázás és a
+hosszúság tehát NEM különbözteti meg a szekvenciális lépéssort a független
+katalógustól — mindkettő ugyanúgy néz ki formailag.
+
+**A tényleges megkülönböztető jel:** nem a lista ELEMEINEK formázása, hanem
+a **szekció-cím szemantikája**:
+- "Steps to pot your plant" — a cím maga procedurális ("steps", "how to"),
+  egy adott növényre vonatkozó cselekvéssor → EGYBEN tartandó.
+- "10 Beginner-Friendly Plants" / a cikk címe "10 Best Plants for Beginner
+  Gardeners" — a cím számot + felsőfokot/kategória-többesszámot tartalmaz
+  → független katalógus → SZÉTBONTANDÓ.
+- "What are some easy low light tolerant plants?" (Minta D beágyazott
+  listája) — kérdés-alakú cím, ami többesszámú kategórianévvel zárul
+  ("...plants?") → szintén független katalógus → SZÉTBONTANDÓ.
+
+**Javított döntés:** az `isIndependentList` heurisztika a **cikk címét és a
+szekció-alcímet** vizsgálja (nem a lista-elemek formázását), ebben a
+sorrendben:
+1. Ha az alcím procedurális kulcsszót tartalmaz (`steps`, `how to`,
+   `guide to`) → **összefüggő** (ez a legmagasabb bizalmú jel, elsőként
+   ellenőrizzük).
+2. Ha a cikk címe VAGY az alcím számot + felsőfok/kategória-szót tartalmaz
+   (`best`, `top`, `beginner`, `favorite`) → **független**.
+3. Ha az alcím kérdés-alakú és többesszámú főnévvel zárul ("what/which
+   are some ... X-s?") → **független**.
+4. Egyébként → **összefüggő** (biztonságos alapértelmezés — a legtöbb
+   szekció ilyen).
+
+**Extra egyszerűsítés, amit ez a felfedezés hozott:** az
+`isIndependentList` hívása KIZÁRÓLAG számozott (`1.`/`**1.**`) listákra
+történik, legalább 3 elemtől — a bullet-listákat (pl. Minta B "Why some
+prefer..."/"When to consider..." indoklás-felsorolásai, vagy Minta C "At a
+Glance" összefoglalója) sosem bontjuk elemenként, mindig egyben egy chunk
+marad. Ez megfelel a korábbi megfigyelésnek (4. pont: az "At a Glance"
+bullet-blokk önmagában jó, EGYBEN tartandó chunk-jelölt), és feleslegessé
+teszi, hogy a heurisztikának egyáltalán foglalkoznia kelljen a
+bullet-listákkal.
+
+---
+
 ## (ide jönnek a következő döntések...)
