@@ -167,12 +167,23 @@ Utólag átgondolva, a `--scope local` használata (a `--scope project` helyett)
 
 ## További dokumentáció
 
+**HF3 (RAG) leadandók:**
+
+- [`docs/dontesek-hf3.md`](docs/dontesek-hf3.md) — a chunking-stratégia és a build közben hozott döntések indoklása (HF3 2. pont)
+- [`docs/rag-proposal.md`](docs/rag-proposal.md) — a RAG-pipeline teljes build-terve (csomagstruktúra, séma, routing, keresési pipeline)
+- [`docs/golden-set.md`](docs/golden-set.md) — golden set: nyers vektorkeresés vs. teljes pipeline összevetés + negatív teszt (HF3 4. pont)
+- [`docs/architektura-hf3.md`](docs/architektura-hf3.md) + [`docs/architektura-hf3-abra.jpg`](docs/architektura-hf3-abra.jpg) — a tudásbázis-karbantartás terve + kötelező architektúra-ábra (HF3 5. pont)
+- Multi-provider routing indoklása: [`docs/rag-proposal.md`](docs/rag-proposal.md) 4. pontja ("Multi-provider routing")
+- Költségbecslés: fent, ebben a fájlban ("Költségbecslés" szakasz, HF3 6. pont)
+
+**Kurzus-alapdokumentumok (HF1/HF2-ből örökölt):**
+
 - [`docs/roi.md`](docs/roi.md) — ROI-levezetés
 - [`docs/system-prompt-javitas-indoklas.md`](docs/system-prompt-javitas-indoklas.md) — system prompt minőségi javításainak indoklása
 - [`docs/implementacios-terv.md`](docs/implementacios-terv.md) — implementációs terv
 - [`docs/brs-plantbase.md`](docs/brs-plantbase.md) — üzleti követelmények
 - [`docs/stack.md`](docs/stack.md) — technológiai stack
-- [`docs/architektura.md`](docs/architektura.md) — architektúra
+- [`docs/architektura.md`](docs/architektura.md) — architektúra (Nx monorepo szerkezet — nem tévesztendő össze a fenti `architektura-hf3.md`-vel)
 - [`docs/konvenciok.md`](docs/konvenciok.md) — kódkonvenciók
 - [`docs/dev-workflow.md`](docs/dev-workflow.md) — fejlesztői workflow
 - [`docs/system-prompt.md`](docs/system-prompt.md) — az agent teljes system promptja
