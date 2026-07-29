@@ -2,13 +2,15 @@
 // Connection URL is configured in ../prisma.config.ts (Prisma 7 config model), not here.
 
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "library"
-  output     = "../generated/client"
+  provider        = "prisma-client-js"
+  engineType      = "library"
+  output          = "../generated/client"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 // products (stack.md) — plain-text categorical columns on purpose (no DB enum,
@@ -36,4 +38,24 @@ model Product {
   description     String?
 
   @@map("products")
+}
+
+// RAG (HF3, docs/rag-proposal.md #2): chunk-szintű tudásbázis a data/knowledge
+// cikkekből, pgvector embeddinggel. A packages/rag ingest-je ír ide (ugyanazon
+// read-write DATABASE_URL-en, mint a Product-tábla migrációja/seedje), a
+// packages/core egy új tool-ja csak OLVAS innen, a read-only kapcsolaton
+// (architektura.md #2 "két kapcsolat, két jog" elvének kiterjesztése).
+model KnowledgeChunk {
+  id          Int      @id @default(autoincrement())
+  articleSlug String   @map("article_slug") // pl. "ask-the-sill__best-floor-planter"
+  title       String // grounding: cikk cím
+  source      String // grounding: URL
+  sectionPath String?  @map("section_path") // szülő-alcím, kontextusként
+  content     String
+  contentHash String   @map("content_hash") // előretekintés: docs/ARCHITEKTURA.md inkrementális re-ingestjéhez
+  embedding   Unsupported("vector(1536)") // Cohere embed-v4.0 default dim — verify against a real API response (cohere-embed-client.ts)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("knowledge_chunks")
+  @@index([articleSlug])
 }

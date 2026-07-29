@@ -32,6 +32,9 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'plantbase_readonly')
 GRANT CONNECT ON DATABASE plantbase TO plantbase_readonly;
 GRANT USAGE ON SCHEMA public TO plantbase_readonly;
 GRANT SELECT ON products TO plantbase_readonly;
+-- knowledge_chunks (docs/rag-proposal.md #2): the search-knowledge tool
+-- (packages/core, R5) reads this via the same read-only connection.
+GRANT SELECT ON knowledge_chunks TO plantbase_readonly;
 
 -- Defense-in-depth: also default future tables in `public` to read-only for
 -- this role, so a later `prisma migrate dev` adding tables doesn't silently

@@ -89,7 +89,7 @@ model KnowledgeChunk {
   sectionPath String?  @map("section_path")    // szülő-alcím(ek), kontextusként a chunk mellett
   content     String
   contentHash String   @map("content_hash")    // előretekintés: docs/ARCHITEKTURA.md incrementális re-ingestjéhez
-  embedding   Unsupported("vector(1024)")
+  embedding   Unsupported("vector(1536)")
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("knowledge_chunks")
@@ -97,16 +97,36 @@ model KnowledgeChunk {
 }
 ```
 
-- `vector(1024)`: a Cohere `embed-multilingual-v3.0` kimeneti dimenziója (ld.
-  3. pont) — implementáció előtt Context7-tel ellenőrizzük a pontos, akkor
-  aktuális dimenziószámot (`architektura.md` #7 elve).
+- `vector(1536)`: a Cohere `embed-v4.0` (ld. 4. pont — a modellnév a build
+  közben, Context7-tel ellenőrzött, akkor aktuális névre frissült, az eredeti
+  `embed-multilingual-v3.0` tervet felülírva) feltételezett alapértelmezett
+  dimenziója. A telepített `cohere-ai` SDK `EmbedRequest` típusában NINCS
+  dimenzió-override mező (ellenőrizve a `node_modules`-ban), tehát a tényleges
+  méret az API szerver-oldali alapértelmezése — ezt **nem sikerült valós
+  API-hívással megerősíteni** (nem volt érvényes `COHERE_API_KEY` az
+  implementáció idején). **R4 előtt kötelező ellenőrizni** egy valós
+  `embedTexts(...)` hívás visszatérési vektor-hosszával, és ha eltér, új
+  migrációval igazítani az oszlopot.
 - `contentHash`: most még nincs mögötte logika (a HF3 5. pontja szerint az
   inkrementális frissítés csak `docs/ARCHITEKTURA.md`-ben terv, nem kód) — de
   a mező felvétele most nulla költség, és előkészíti azt a történetet.
-- Prisma natívan nem tud vektor-hasonlósági lekérdezést építeni; az `Unsupported`
-  típus csak a séma/migráció szintjén reprezentálja az oszlopot — a tényleges
-  `<=>` (cosine distance) lekérdezés nyers SQL-lel megy (ld. 5. pont), pont
-  úgy, ahogy a `runSql` tool is nyers `pg`-vel dolgozik a `products` táblán.
+- Prisma natívan nem tud vektor-hasonlósági lekérdezést építeni, ÉS — ez R3
+  közben derült ki — a schema-diffelője az `Unsupported(...)` string
+  TARTALMÁNAK változását sem ismeri fel (`vector(1024)` → `vector(1536)`
+  átírásra `prisma migrate dev` "Already in sync"-et jelentett, semmit nem
+  generált). Emiatt a `knowledge_chunks` tábla teljes olvasás/írás útja —
+  nemcsak a keresés (ld. 5. pont) — nyers SQL-lel megy, sosem a Prisma
+  Client API-ján keresztül: a `packages/rag`-ben egy `pg` `Pool` a
+  DATABASE_URL ellen (`write-knowledge-chunks.ts`), tükrözve a
+  `readonly-db-client.ts` mintáját. A Prisma marad a séma/migráció
+  tulajdonosa (`prisma/schema.prisma`), de a `KnowledgeChunk` táblát
+  ténylegesen sosem a generált klienssel érjük el. Az `Unsupported`
+  típusú oszlop dimenzió-változtatása is csak kézzel írt
+  migration.sql-lel + `prisma migrate resolve --applied` jelöléssel
+  ment végig (a diffelő ezt sem generálja le automatikusan).
+- A pgvector kiterjesztéshez a `docker-compose.yml` image-e
+  `postgres:16`-ról `pgvector/pgvector:pg16`-ra váltott (drop-in csere,
+  ugyanaz a Postgres, a meglévő named volume/adat megmaradt).
 
 ---
 
@@ -154,8 +174,8 @@ tesztelné), vagy maga a teszt válna instabillá. A szabály-alapú heurisztika
 | Szerep | Provider / modell | Indoklás |
 |---|---|---|
 | HyDE-generálás (hipotetikus válasz-bekezdés a query-ből) | Anthropic, `claude-haiku-4-5` | Már bekötött provider (nincs új integráció), és a HyDE egy olcsó, gyors, "belső" generálási lépés — nem a felhasználó felé menő válasz, nem indokolt rá a drágább modell. |
-| Embedding (chunk + query) | Cohere, `embed-multilingual-v3` (vagy az implementáció idején aktuális multilingual embed modell) | Dedikált embedding-modell jobb retrieval-minőséget ad, mint egy általános LLM embeddingként használva; a multilingual változat kell, mert a query magyar, a korpusz angol (ld. 6. pont). |
-| Rerank | Cohere, `rerank-v3.5` (vagy az akkor aktuális multilingual rerank modell) | A Cohere Rerank gyakorlatilag referencia-termék erre a lépésre; ugyanaz a provider adja az embedet és a reranket, egy API-kulccsal — nem szaporítjuk a providerek számát a minimumon (2) felül feleslegesen. |
+| Embedding (chunk + query) | Cohere, `embed-v4.0` (R3-ban Context7-tel megerősített, aktuális modellnév — az eredetileg tervezett `embed-multilingual-v3.0`-t váltja) | Dedikált embedding-modell jobb retrieval-minőséget ad, mint egy általános LLM embeddingként használva; multilingual, mert a query magyar, a korpusz angol (ld. 6. pont). |
+| Rerank | Cohere, `rerank-v4.0-pro` (Context7-tel megerősített, aktuális modellnév) | A Cohere Rerank gyakorlatilag referencia-termék erre a lépésre; ugyanaz a provider adja az embedet és a reranket, egy API-kulccsal — nem szaporítjuk a providerek számát a minimumon (2) felül feleslegesen. |
 | Végső válaszgenerálás (grounding) | Anthropic, `claude-sonnet-5` | Ez már a meglévő `askAgent` modellje — a RAG-tool csak egy újabb tool a már működő loopban, nem cserél modellt a válaszadási lépésen. |
 
 **Szereposztás egy mondatban:** *generálás → Claude (már bekötött, a
