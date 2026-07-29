@@ -59,9 +59,15 @@ lépésekkel. Lásd a teljes tervet: `docs/rag-proposal.md`.
 pnpm --filter rag run ingest
 ```
 
-Ez valós Cohere API-hívásokat indít (kb. 202 hívás, cikkenként egy,
-összesen kb. 1500+ chunkra) — költséggel jár, ld. a README
-költségbecslés-szakaszát (később).
+Ez valós Cohere API-hívásokat indít (kb. 202 hívás, cikkenként egy) —
+költséggel jár, ld. a README költségbecslés-szakaszát (később).
+
+**Státusz:** az ingest egyszer már lefutott a teljes korpuszon: 202 cikk,
+1552 chunk a `knowledge_chunks` táblában (a beágyazás dimenziója valós
+API-hívással megerősítve: 1536). Egy valós, végponttól-végpontig lekérdezés
+(`searchKnowledge("Hogyan gondozzak egy Meyer citromfát?")`) helyesen az
+5 legjobb találatot a "How To Care for a Meyer Lemon" cikk releváns
+szekcióiból adta vissza, 0.87–0.93 relevancia-score-okkal.
 
 ## Architektúra
 

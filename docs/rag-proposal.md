@@ -302,6 +302,15 @@ tudásbázisban nem szereplő kérdésre az agent kimondja, hogy nincs találat.
 költségbecslés a READMÉ-ben) végrehajtási munka, nem architektúra-döntés —
 külön tervezés nélkül indíthatók.
 
+**R4 valós futtatása megtörtént** (miután érvényes `COHERE_API_KEY` került
+a `.env`-be): 202 cikk, 1552 chunk a `knowledge_chunks` táblában, a
+beágyazás dimenziója valós API-hívással megerősítve (1536). Egy valós,
+végponttól-végpontig `searchKnowledge`-hívás ("Hogyan gondozzak egy Meyer
+citromfát?") helyesen az 5 legjobb találatot a megfelelő cikk releváns
+szekcióiból adta vissza (0.87–0.93 relevancia-score), ami a teljes
+pipeline (HyDE → embed → vektor-keresés → rerank → grounding) első valós
+adaton mért működési bizonyítéka a golden set előtt.
+
 ## Hatókörön kívül (ebben a tervben nem szerepel)
 
 - `docs/ARCHITEKTURA.md` tartalma (inkrementális frissítés terve, ábra) —
