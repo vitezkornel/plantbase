@@ -30,6 +30,15 @@ Hogyan gondozzak egy Monsterát?
 ```
 Hol van a rendelésem, mikor érkezik meg?
 ```
+## Így néz ki működés közben
+
+**Normál gondozási kérdés — forrással alátámasztott, formázott válasz:**
+
+![Normál válasz](screenshots/customer-chat-normal-valasz.png)
+
+**Rendeléshez kötődő kérdés — automatikus eszkaláció, emberi kollégához irányítva:**
+
+![Eszkaláció](screenshots/customer-chat-eszkalacio.png)
 
 ## Ismert korlátok
 
