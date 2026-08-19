@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plantbase — ügyfél-chat business case</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest: #1b3a2b;
+    --forest-deep: #12271d;
+    --sage: #7fa38a;
+    --sage-pale: #dce8de;
+    --cream: #f6f4ec;
+    --gold: #cf9d2e;
+    --gold-soft: #e9c876;
+    --ink: #1c2420;
+    --clay: #b25b45;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--forest-deep);
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    overflow: hidden;
+  }
+  .deck { position: relative; width: 100%; height: 100vh; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center;
+    padding: clamp(32px, 6vw, 100px);
+    opacity: 0; visibility: hidden;
+    transform: translateY(14px);
+    transition: opacity .5s ease, transform .5s ease, visibility .5s;
+    background: var(--cream);
+  }
+  .slide.active { opacity: 1; visibility: visible; transform: translateY(0); }
+  .slide.dark { background: linear-gradient(160deg, var(--forest) 0%, var(--forest-deep) 100%); color: var(--cream); }
+
+  h1, h2, h3 { font-family: 'Fraunces', serif; font-weight: 500; margin: 0 0 0.4em; letter-spacing: -0.01em; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 14px; font-weight: 500;
+  }
+  .dark .eyebrow { color: var(--gold-soft); }
+  p { line-height: 1.55; font-size: 1.05rem; }
+  .lede { font-size: 1.3rem; line-height: 1.5; max-width: 720px; color: #384a3f; }
+  .dark .lede { color: #d9e6dc; }
+
+  /* Slide 1 — hero */
+  #s1 h1 { font-size: clamp(2.4rem, 6vw, 4.4rem); max-width: 900px; }
+  #s1 .pitch { font-size: clamp(1.15rem, 2vw, 1.5rem); max-width: 760px; color: var(--sage-pale); margin-top: 18px; }
+  .sprout { position: absolute; right: clamp(24px, 6vw, 90px); bottom: clamp(24px,6vw,80px); opacity: 0.9; }
+
+  /* generic two column */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 28px; align-items: start; }
+  .card {
+    background: #fff; border: 1px solid #e3ddc9; border-radius: 4px;
+    padding: 22px 24px;
+  }
+  .card h3 { font-size: 1.05rem; color: var(--forest); }
+  .card ul { margin: 0; padding-left: 18px; }
+  .card li { margin-bottom: 8px; line-height: 1.45; }
+  .solve { border-left: 4px solid var(--gold); }
+  .skip { border-left: 4px solid var(--clay); opacity: 0.92; }
+
+  /* pain list */
+  .pain-list { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; max-width: 760px; }
+  .pain-item { display: flex; gap: 14px; align-items: baseline; }
+  .pain-item .n { font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 0.85rem; min-width: 22px; }
+  .pain-item span.t { font-size: 1.02rem; }
+
+  /* flow diagram */
+  .flow { display: flex; align-items: center; gap: 10px; margin-top: 36px; flex-wrap: wrap; }
+  .fbox {
+    background: #fff; border: 1px solid #d8d2ba; border-radius: 4px; padding: 16px 18px;
+    font-size: 0.92rem; min-width: 150px; text-align: center;
+  }
+  .fbox.human { border-color: var(--clay); background: #fbeee9; }
+  .fbox.brain { border-color: var(--gold); background: #fdf6e3; }
+  .arrow { color: var(--sage); font-size: 1.3rem; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e3ddc9; vertical-align: top; }
+  th { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--forest); }
+  .tag { display: inline-block; font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 20px; background: var(--sage-pale); color: var(--forest); }
+  .tag.todo { background: #fbeee9; color: var(--clay); }
+
+  /* number slide */
+  .bignum { font-family: 'Fraunces', serif; font-size: clamp(3rem, 9vw, 6.5rem); color: var(--gold); line-height: 1; margin: 6px 0 10px; }
+  .numlabel { font-size: 1.1rem; color: var(--forest); }
+  .formula { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #5a6b5e; margin-top: 18px; background: #fff; padding: 12px 16px; border-radius: 4px; border: 1px solid #e3ddc9; display: inline-block; }
+  .caveat { font-size: 0.85rem; color: #6a7a6e; margin-top: 14px; max-width: 620px; }
+  #s6 { justify-content: flex-start; overflow-y: auto; padding-top: clamp(28px, 5vw, 60px); }
+  #s6 .bignum { font-size: clamp(2.2rem, 6vw, 4rem); margin-top: 2px; }
+
+  /* rollout */
+  .milestones { display: flex; gap: 0; margin-top: 30px; }
+  .ms { flex: 1; position: relative; padding: 0 18px 0 0; }
+  .ms:not(:last-child)::after { content: "→"; position: absolute; right: -6px; top: 4px; color: var(--sage); }
+  .ms .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); margin-bottom: 10px; }
+  .ms h4 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 1rem; margin: 0 0 6px; }
+  .ms p { font-size: 0.88rem; color: #52604f; }
+  .risk-ask { display: grid; grid-template-columns: 1.3fr 1fr; gap: 32px; margin-top: 30px; }
+  .risk-ask .card ul { font-size: 0.92rem; }
+
+  /* nav */
+  .progress {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 7px; z-index: 20;
+  }
+  .leaf {
+    width: 9px; height: 9px; border-radius: 60% 0 60% 0; background: #b7c9ba;
+    transform: rotate(45deg); cursor: pointer; transition: background .25s, transform .25s;
+  }
+  .leaf.on { background: var(--gold); transform: rotate(45deg) scale(1.25); }
+  .navhint {
+    position: fixed; top: 22px; right: 28px; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem; color: #97a99b; letter-spacing: 0.05em; z-index: 20;
+  }
+  .slidenum {
+    position: fixed; top: 22px; left: 28px; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem; color: #97a99b; z-index: 20;
+  }
+  .dark ~ .slidenum, .slide.dark .slidenum {color: #9cb3a1;}
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <section class="slide dark active" id="s1">
+    <div class="eyebrow">Plantbase · vezetői döntéselőkészítő</div>
+    <h1>Az ügyfél ne várjon<br/>emberre egy öntözési kérdéssel.</h1>
+    <p class="pitch">A vásárló a webshopban azonnal választ kap arra, melyik növény való a lakásába és hogyan kell gondoznia — 0–24, forrással alátámasztva — így az ügyfélszolgálat a bonyolult, valódi ügyekre koncentrálhat.</p>
+    <svg class="sprout" width="120" height="140" viewBox="0 0 120 140" fill="none">
+      <path d="M60 140 V70" stroke="#5f8a6c" stroke-width="3"/>
+      <path d="M60 90 C 30 90, 20 60, 35 40 C 50 55, 55 75, 60 90 Z" fill="#7fa38a"/>
+      <path d="M60 80 C 90 80, 100 50, 85 30 C 70 45, 63 65, 60 80 Z" fill="#cf9d2e" opacity="0.85"/>
+    </svg>
+  </section>
+
+  <section class="slide" id="s2">
+    <div class="eyebrow">01 · A helyzet ma</div>
+    <h2>Ugyanaz a húsz kérdés,<br/>minden nap újra.</h2>
+    <div class="pain-list">
+      <div class="pain-item"><span class="n">→</span><span class="t">A vásárló e-mailben vagy chatben kérdez, az ügyintéző kikeresi a katalógusból a növényt és a gondozási leírást.</span></div>
+      <div class="pain-item"><span class="n">→</span><span class="t">Munkaidőn kívül nincs válasz — pedig sokan éppen akkor öntöznek és kérdeznek.</span></div>
+      <div class="pain-item"><span class="n">→</span><span class="t">Attól függően kap más választ a vásárló, hogy éppen ki veszi fel — nincs egységes tudás.</span></div>
+      <div class="pain-item"><span class="n">→</span><span class="t">Az első válaszra órákat vár, miközben a kérdés valójában néhány másodperc alatt megválaszolható lenne.</span></div>
+    </div>
+  </section>
+
+  <section class="slide" id="s3">
+    <div class="eyebrow">02 · Scope</div>
+    <h2>Mit old meg — és mit nem.</h2>
+    <div class="cols">
+      <div class="card solve">
+        <h3>✓ Ezt vállalja</h3>
+        <ul>
+          <li><strong>0–24 elérhetőség</strong> — nincs nyitvatartás, a kérdés bármikor megválaszolható.</li>
+          <li><strong>Tömeges, ismétlődő kérdések</strong> — öntözés, fényigény, átültetés: a top témák automatikusan lezárva.</li>
+          <li><strong>Egységes, forrással alátámasztott válasz</strong> — mindenki ugyanazt a tudásbázist kapja, nem a kolléga aznapi hangulatát.</li>
+        </ul>
+      </div>
+      <div class="card skip">
+        <h3>✕ Ezt tudatosan nem</h3>
+        <ul>
+          <li><strong>Rendelés-státusz, szállítás, számlázás</strong> — más rendszer, más adat kellene hozzá.</li>
+          <li><strong>Reklamáció, visszáru ügyintézése</strong> — mindig emberi kézbe kerül.</li>
+          <li><strong>Elpártoló-vásárló előrejelzés</strong> — külön analitikai projekt, nem ennek a PoC-nak a része.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="s4">
+    <div class="eyebrow">03 · Hogyan működik</div>
+    <h2>Válaszol — vagy őszintén szól, ha nem tud.</h2>
+    <p class="lede">Egy meglévő, éles agent új, ügyfél felé néző bejáratot kap. A logika nem változik: ha bizonytalan, nem talál ki választ.</p>
+    <div class="flow">
+      <div class="fbox">Ügyfél kérdése<br/><small>a webshop chatjében</small></div>
+      <div class="arrow">→</div>
+      <div class="fbox brain">Agent<br/><small>katalógus + gondozási tudásbázis</small></div>
+      <div class="arrow">→</div>
+      <div class="fbox">Forrással ellátott válasz<br/><small>a chatben, azonnal</small></div>
+    </div>
+    <div class="flow" style="margin-top:14px;">
+      <div class="fbox brain">Agent bizonytalan<br/><small>vagy rendeléshez kötődő kérdés</small></div>
+      <div class="arrow">→</div>
+      <div class="fbox human">Kollégához irányítva<br/><small>emberi jóváhagyási pont</small></div>
+    </div>
+  </section>
+
+  <section class="slide" id="s5">
+    <div class="eyebrow">04 · Adattérkép</div>
+    <h2>Mi hova megy — és mi nem hagyja el a rendszert.</h2>
+    <table>
+      <tr><th>Adat</th><th>Hova megy</th><th>Megjegyzés</th></tr>
+      <tr><td>Vásárló kérdése + releváns katalógus-kivonat</td><td>Felhő (Anthropic API) — feldolgozásra</td><td>Csak a kérdéshez szükséges pár sor, nem a teljes katalógus</td></tr>
+      <tr><td>Teljes termékkatalógus, teljes tudásbázis</td><td><strong>Soha nem hagyja el</strong> a saját rendszerünket</td><td>Marad a saját adatbázisban</td></tr>
+      <tr><td>Kérdés, válasz, eszkalációs jelzés, használt források</td><td>Napló (JSONL fájl)</td><td>Ma nincs hozzáférés-korlátozás — élesítés előtt pótolandó</td></tr>
+      <tr><td>Ügyféladat (név, e-mail, rendelésszám)</td><td><strong>Nem kerül a modellhez</strong></td><td>A rendszer csak a nyilvános katalógusra és tudásbázisra épül</td></tr>
+    </table>
+  </section>
+
+  <section class="slide" id="s6">
+    <div class="eyebrow">05 · A szám</div>
+    <div class="bignum">~35 óra/hó</div>
+    <div class="numlabel">felszabaduló ügyfélszolgálati kapacitás — becsült, óvatos forgatókönyv</div>
+    <div class="formula">~600 gondozási megkeresés/hó × 70% önállóan lezárva × 5 megspórolt perc ≈ 35 óra/hó</div>
+    <p class="caveat">Becsült szám, mért baseline nélkül — az első két hét pilot-adata pontosítja. A haszont alulbecsülve, a bevezetési terheket felfelé kerekítve számoltuk (a fejlesztés gyakorlatilag megvan, csak élesítési munka van hátra: naplózás-jogosultság, PII-szűrés).</p>
+    <p class="lede" style="margin-top:22px; font-size:1.05rem;"><strong>Ez nem létszámcsökkentés</strong> — a felszabaduló idő azt jelenti, hogy a csapat végre azokra az ügyekre tud figyelni, amikhez tényleg ember kell.</p>
+    <div class="pain-list" style="margin-top:14px;">
+      <div class="pain-item"><span class="n">→</span><span class="t"><strong>Alaposabb kezelés a nehéz ügyeknél</strong> — egy reklamáció vagy egy elpusztult növény miatti panasz rohanás helyett annyi figyelmet kap, amennyit megérdemel.</span></div>
+      <div class="pain-item"><span class="n">→</span><span class="t"><strong>Proaktív megkeresés a nagy értékű vásárlóknál</strong> — pl. felhívni, aki nemrég nagyobb rendelést adott le, mielőtt panaszra kerülne sor.</span></div>
+      <div class="pain-item"><span class="n">→</span><span class="t"><strong>A tudásbázis karbantartása, bővítése</strong> — a csapat szakértelme közvetlenül jobbá teszi a rendszert, nem feleslegessé válik tőle.</span></div>
+    </div>
+    <p class="lede" style="margin-top:16px; font-size:1.05rem; color:var(--forest);">Nem csak több ügyfél kap választ — a csapat is jobb munkát tud végezni azoknál, akik tényleg embert érdemelnek.</p>
+  </section>
+
+  <section class="slide" id="s7">
+    <div class="eyebrow">06 · Mérési terv</div>
+    <h2>Honnan tudjuk, hogy működik.</h2>
+    <table>
+      <tr><th>Mit mérünk</th><th>Honnan</th><th>Státusz</th></tr>
+      <tr><td>Eszkalációs arány <em>(a hiba-oldali mutató)</em></td><td>agent-napló, <code>escalated</code> jelzés</td><td><span class="tag">Ma is megvan</span></td></tr>
+      <tr><td>Önkiszolgálással lezárt kérdések aránya</td><td>agent-napló, nem-eszkalált válaszok</td><td><span class="tag">Ma is megvan</span></td></tr>
+      <tr><td>Válaszidő</td><td>agent-napló időbélyegek</td><td><span class="tag">Ma is megvan</span></td></tr>
+      <tr><td>Forrás nélküli állítás aránya</td><td>mintavételes review</td><td><span class="tag todo">Beépítendő</span></td></tr>
+    </table>
+    <p class="caveat">Teljes tábla, minden sorral, forrással és riportálási móddal: <code>docs/meresi-terv.md</code> a repóban.</p>
+  </section>
+
+  <section class="slide dark" id="s8">
+    <div class="eyebrow">07 · Rollout és döntés</div>
+    <h2 style="color:var(--cream)">A következő két hét.</h2>
+    <div class="milestones">
+      <div class="ms"><div class="dot"></div><h4 style="color:var(--gold-soft)">Pilot indul</h4><p style="color:#c9d8cd">Top 15 növényre szűkítve, kis ügyfélkör</p></div>
+      <div class="ms"><div class="dot"></div><h4 style="color:var(--gold-soft)">Döntési pont</h4><p style="color:#c9d8cd">2 hét után: éri-e a válaszminőség a küszöböt</p></div>
+      <div class="ms"><div class="dot"></div><h4 style="color:var(--gold-soft)">Teljes katalógus</h4><p style="color:#c9d8cd">Gazda: az ügyfélszolgálat vezetője</p></div>
+    </div>
+    <div class="risk-ask">
+      <div class="card" style="background:#20402f; border-color:#2f5540;">
+        <h3 style="color:var(--gold-soft)">Legnagyobb kockázat</h3>
+        <ul style="color:#d9e6dc;">
+          <li>Téves gondozási tanács — csökkentve: forrás nélkül a rendszer nem válaszol, hanem eszkalál</li>
+          <li>Naplózás ma nincs hozzáférés-korlátozva — pilot előtt pótolandó</li>
+        </ul>
+      </div>
+      <div class="card" style="background:#20402f; border-color:#2f5540;">
+        <h3 style="color:var(--gold-soft)">Amit kérünk</h3>
+        <ul style="color:#d9e6dc;">
+          <li>Zöld utat egy 2 hetes pilotra</li>
+          <li>Az ügyfélszolgálat-vezető heti 2 óráját a mérésre</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="slidenum" id="slidenum">01 / 08</div>
+<div class="navhint">← → lapozás</div>
+<div class="progress" id="progress"></div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const progress = document.getElementById('progress');
+  const slidenum = document.getElementById('slidenum');
+  let idx = 0;
+
+  slides.forEach((_, i) => {
+    const leaf = document.createElement('div');
+    leaf.className = 'leaf' + (i === 0 ? ' on' : '');
+    leaf.addEventListener('click', () => go(i));
+    progress.appendChild(leaf);
+  });
+
+  function go(i) {
+    if (i < 0 || i >= slides.length) return;
+    slides[idx].classList.remove('active');
+    idx = i;
+    slides[idx].classList.add('active');
+    document.querySelectorAll('.leaf').forEach((l, li) => l.classList.toggle('on', li === idx));
+    slidenum.textContent = String(idx + 1).padStart(2, '0') + ' / ' + String(slides.length).padStart(2, '0');
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') go(idx + 1);
+    if (e.key === 'ArrowLeft') go(idx - 1);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.leaf')) return;
+    const rect = document.body.getBoundingClientRect();
+    const x = e.clientX;
+    if (x > rect.width * 0.66) go(idx + 1);
+    else if (x < rect.width * 0.34) go(idx - 1);
+  });
+</script>
+
+</body>
+</html>
