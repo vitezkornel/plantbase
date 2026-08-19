@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plantbase Chat</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #f4f6f4;
+    color: #1f2a1f;
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 600px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 16px 20px;
+    background: #2f6f3e;
+    color: white;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+  }
+  .msg-assistant {
+    white-space: normal;
+  }
+  .msg p {
+    margin: 0 0 8px;
+  }
+  .msg p:last-child {
+    margin-bottom: 0;
+  }
+  .msg ul, .msg ol {
+    margin: 0 0 8px;
+    padding-left: 20px;
+  }
+  .msg ul:last-child, .msg ol:last-child {
+    margin-bottom: 0;
+  }
+  .msg li {
+    margin: 2px 0;
+  }
+  .msg strong {
+    font-weight: 600;
+  }
+  .msg-user {
+    align-self: flex-end;
+    background: #2f6f3e;
+    color: white;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-assistant {
+    align-self: flex-start;
+    background: white;
+    border: 1px solid #dde3dd;
+    border-bottom-left-radius: 4px;
+  }
+  .msg-error {
+    align-self: flex-start;
+    background: #fdecea;
+    border: 1px solid #f5c6c0;
+    color: #8a2c22;
+    border-bottom-left-radius: 4px;
+  }
+  .msg-escalated {
+    align-self: flex-start;
+    background: #fff8e1;
+    border: 1px solid #f0d98c;
+    color: #5c4a00;
+    border-bottom-left-radius: 4px;
+  }
+  .msg-escalated::before {
+    content: "👤 emberi kollégához továbbítva";
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #8a6d00;
+  }
+  .msg-loading {
+    align-self: flex-start;
+    background: white;
+    border: 1px solid #dde3dd;
+    color: #6b7a6b;
+    border-bottom-left-radius: 4px;
+    font-style: italic;
+  }
+  form {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid #dde3dd;
+    background: white;
+  }
+  #question-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #c8d2c8;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2f6f3e;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:disabled, #question-input:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Plantbase — kérdezz a növényeidről</h1>
+    </header>
+    <div id="messages"></div>
+    <form id="chat-form">
+      <input id="question-input" type="text" placeholder="Írd be a kérdésed…" autocomplete="off" />
+      <button type="submit">Küldés</button>
+    </form>
+  </div>
+
+<script>
+  const messagesEl = document.getElementById('messages');
+  const formEl = document.getElementById('chat-form');
+  const inputEl = document.getElementById('question-input');
+  const buttonEl = formEl.querySelector('button');
+
+  function appendMessage(text, role) {
+    const el = document.createElement('div');
+    el.className = 'msg msg-' + role;
+    if (role === 'assistant' || role === 'escalated') {
+      el.innerHTML = marked.parse(text);
+    } else {
+      el.textContent = text;
+    }
+    messagesEl.appendChild(el);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return el;
+  }
+
+  formEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const question = inputEl.value.trim();
+    if (!question) return;
+
+    appendMessage(question, 'user');
+    inputEl.value = '';
+    inputEl.disabled = true;
+    buttonEl.disabled = true;
+
+    const loadingEl = appendMessage('…gondolkodom', 'loading');
+
+    try {
+      const res = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      const data = await res.json();
+      loadingEl.remove();
+      if (!res.ok) {
+        appendMessage(data.error || 'Ismeretlen hiba történt.', 'error');
+      } else if (data.escalated) {
+        appendMessage(data.answer, 'escalated');
+      } else {
+        appendMessage(data.answer, 'assistant');
+      }
+    } catch (err) {
+      loadingEl.remove();
+      appendMessage('Hálózati hiba történt. Kérjük, próbáld újra.', 'error');
+    } finally {
+      inputEl.disabled = false;
+      buttonEl.disabled = false;
+      inputEl.focus();
+    }
+  });
+</script>
+</body>
+</html>
