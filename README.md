@@ -123,12 +123,13 @@ költségtényező egy kérdésnél.
 
 ## Architektúra
 
-Nx monorepo (pnpm), négy projekt:
+Nx monorepo (pnpm), öt projekt:
 
 - **`packages/core`** — az agent-logika: `agents/ask-agent` (system prompt + agent-loop), `tools/run-sql` és `tools/list-categories` (a két, agentnek regisztrált tool), közös kód (`tool-outcome.ts`, `readonly-db-client.ts`) egy szinttel feljebb.
 - **`packages/db`** — Prisma séma, migráció, seed; a **read-write** DB-kapcsolatot birtokolja (a `products` katalógus és a RAG `knowledge_chunks` táblája is itt kap sémát).
 - **`packages/rag`** — a RAG-tudásbázis ingest-oldala: cikk-parsolás, boilerplate-szűrés, heading-alapú chunkolás, Cohere embedding, pgvector-írás. Lásd `docs/rag-proposal.md`.
 - **`apps/cli`** — a parancssori felület (commander), csak I/O-réteg `packages/core` felett.
+- **`apps/customer-chat`** — minimális, ügyfél felé forduló webes chat demo (PoC), (PoC, nincs hozzá build-target) amely a `packages/core` `askAgent`-jét emberi jóváhagyási ponttal (eszkalációval) egészíti ki. Lásd [`apps/customer-chat/README.md`](apps/customer-chat/README.md).
 
 **Két DB-kapcsolat, két jog**: `DATABASE_URL` (read-write, Prisma migrate/seed, `packages/db`) és `DATABASE_URL_READONLY` (csak SELECT, a `plantbase_readonly` role-lal, közvetlen `pg` klienssel — NEM Prismán keresztül — az agent `runSql`/`listCategories` toolja ezt használja). A kettő szándékosan el van választva: az agentnek fizikailag nincs lehetősége írni az adatbázisba, még egy prompt-injection vagy guard-hiba esetén sem.
 
@@ -175,6 +176,12 @@ Utólag átgondolva, a `--scope local` használata (a `--scope project` helyett)
 - [`docs/architektura-hf3.md`](docs/architektura-hf3.md) + [`docs/architektura-hf3-abra.jpg`](docs/architektura-hf3-abra.jpg) — a tudásbázis-karbantartás terve + kötelező architektúra-ábra (HF3 5. pont)
 - Multi-provider routing indoklása: [`docs/rag-proposal.md`](docs/rag-proposal.md) 4. pontja ("Multi-provider routing")
 - Költségbecslés: fent, ebben a fájlban ("Költségbecslés" szakasz, HF3 6. pont)
+
+**HF5 (ügyfél-chat) leadandók:**
+
+- [`docs/HF5-meresi-terv.md`](docs/HF5-meresi-terv.md) — mérési terv: mit és hogyan mérünk az ügyfél-chat működésén
+- [`docs/HF5-kerdeslap.md`](docs/HF5-kerdeslap.md) — felkészülés a vezetői bemutató kötekedő kérdéseire
+- [`docs/HF5-prezentacio.html`](docs/HF5-prezentacio.html) — a business case prezentáció (böngészőben megnyitva, nyílbillentyűkkel lapozható)
 
 **Kurzus-alapdokumentumok (HF1/HF2-ből örökölt):**
 
