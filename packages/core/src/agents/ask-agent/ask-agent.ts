@@ -17,6 +17,7 @@ import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 
 const MODEL: Anthropic.Model = 'claude-sonnet-5';
 const MAX_TOKENS = 1024;
+const ESCALATE_PREFIX = '[ESCALATE] ';
 
 // The question crosses into packages/core from the outside (CLI argument or
 // interactive stdin line) — an external/untrusted-input boundary
@@ -40,6 +41,8 @@ export interface AskAgentResult {
   usage: AgentUsage;
   /** Absolute path of the JSONL log file written for this interaction. */
   logPath: string;
+  /** True if the agent handed this off to a human (`[ESCALATE] ` prefix). */
+  escalated: boolean;
 }
 
 /**
@@ -70,20 +73,27 @@ export async function askAgent(
     tools: [runSqlTool, listCategoriesTool, searchKnowledgeTool], // one-line-per-tool registration (konvenciok.md)
   });
 
+  const escalated = result.finalText.startsWith(ESCALATE_PREFIX);
+  const answer = escalated
+    ? result.finalText.slice(ESCALATE_PREFIX.length).trim()
+    : result.finalText;
+
   const logPath = await writeInteractionLog({
     system: ASK_AGENT_SYSTEM_PROMPT,
     messages: result.messages,
     response: result.finalText,
     usage: result.usage,
     sqlCalls: extractSqlCalls(result.toolCalls),
+    escalated,
   });
 
   return {
-    answer: result.finalText,
+    answer,
     messages: result.messages,
     system: ASK_AGENT_SYSTEM_PROMPT,
     usage: result.usage,
     logPath,
+    escalated,
   };
 }
 

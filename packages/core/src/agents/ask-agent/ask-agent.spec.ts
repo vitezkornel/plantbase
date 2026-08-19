@@ -179,4 +179,33 @@ describe('askAgent', () => {
 
     await rm(result.logPath, { force: true });
   });
+
+  it('strips the [ESCALATE] prefix and sets escalated=true', async () => {
+    const client = makeClient(
+      '[ESCALATE] Ebben nem tudok segíteni, de egy kollégánk hamarosan jelentkezik.',
+    );
+
+    const result = await askAgent('Hol van a rendelésem?', { client });
+
+    expect(result.answer).toBe(
+      'Ebben nem tudok segíteni, de egy kollégánk hamarosan jelentkezik.',
+    );
+    expect(result.escalated).toBe(true);
+
+    const raw = await readFile(result.logPath, 'utf-8');
+    const entry = JSON.parse(raw.trim().split('\n')[0]);
+    expect(entry.escalated).toBe(true);
+
+    await rm(result.logPath, { force: true });
+  });
+
+  it('sets escalated=false for a normal (non-escalated) answer', async () => {
+    const client = makeClient('Budapest a fővárosa.');
+
+    const result = await askAgent('Mi Magyarország fővárosa?', { client });
+
+    expect(result.escalated).toBe(false);
+
+    await rm(result.logPath, { force: true });
+  });
 });

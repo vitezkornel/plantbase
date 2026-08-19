@@ -47,6 +47,7 @@ export interface InteractionLogEntry {
   response: string;
   usage: AgentUsage;
   sqlCalls: SqlCallLogEntry[];
+  escalated: boolean;
 }
 
 /**
