@@ -10,6 +10,7 @@ function makeResult(overrides: Partial<AskAgentResult> = {}): AskAgentResult {
     system: '<role>test</role>',
     usage: { inputTokens: 10, outputTokens: 5 },
     logPath: '/fake/logs/whatever.jsonl',
+    escalated: false,
     ...overrides,
   };
 }
