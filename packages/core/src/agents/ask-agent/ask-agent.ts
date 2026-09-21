@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropic } from '@ai-sdk/anthropic';
+import type { LanguageModel, ModelMessage } from 'ai';
 import { z } from 'zod';
 import '../../config/env.js';
 import {
@@ -6,16 +7,22 @@ import {
   type AgentUsage,
   type SqlCallLogEntry,
 } from '../../logging/jsonl-logger.js';
-import { listCategoriesTool } from '../../tools/list-categories/list-categories-tool.js';
+import {
+  LIST_CATEGORIES_TOOL_NAME,
+  listCategoriesTool,
+} from '../../tools/list-categories/list-categories-tool.js';
 import {
   RUN_SQL_TOOL_NAME,
   runSqlTool,
 } from '../../tools/run-sql/run-sql-tool.js';
-import { searchKnowledgeTool } from '../../tools/search-knowledge/search-knowledge-tool.js';
+import {
+  SEARCH_KNOWLEDGE_TOOL_NAME,
+  searchKnowledgeTool,
+} from '../../tools/search-knowledge/search-knowledge-tool.js';
 import { runAgentLoop, type ToolCallRecord } from '../agent-loop.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 
-const MODEL: Anthropic.Model = 'claude-sonnet-5';
+const MODEL_ID = 'claude-sonnet-5';
 const MAX_TOKENS = 1024;
 const ESCALATE_PREFIX = '[ESCALATE] ';
 
@@ -27,15 +34,15 @@ const AskAgentInputSchema = z.object({
 });
 
 export interface AskAgentDeps {
-  /** Injectable for tests; defaults to a real Anthropic client. */
-  client?: Anthropic;
+  /** Injectable for tests; defaults to the real Anthropic provider. */
+  model?: LanguageModel;
 }
 
 export interface AskAgentResult {
   /** The model's final natural-language answer. */
   answer: string;
   /** Full message array sent to/received from the model (for --show-prompt). */
-  messages: Anthropic.MessageParam[];
+  messages: ModelMessage[];
   /** The system prompt used for this call (for --show-prompt). */
   system: string;
   usage: AgentUsage;
@@ -59,18 +66,20 @@ export async function askAgent(
 ): Promise<AskAgentResult> {
   const { question: validQuestion } = AskAgentInputSchema.parse({ question });
 
-  const client = deps.client ?? new Anthropic();
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: validQuestion },
-  ];
+  const model = deps.model ?? anthropic(MODEL_ID);
+  const messages: ModelMessage[] = [{ role: 'user', content: validQuestion }];
 
   const result = await runAgentLoop({
-    client,
-    model: MODEL,
+    model,
     maxTokens: MAX_TOKENS,
     system: ASK_AGENT_SYSTEM_PROMPT,
     messages,
-    tools: [runSqlTool, listCategoriesTool, searchKnowledgeTool], // one-line-per-tool registration (konvenciok.md)
+    tools: {
+      // one-line-per-tool registration (konvenciok.md)
+      [RUN_SQL_TOOL_NAME]: runSqlTool,
+      [LIST_CATEGORIES_TOOL_NAME]: listCategoriesTool,
+      [SEARCH_KNOWLEDGE_TOOL_NAME]: searchKnowledgeTool,
+    },
   });
 
   const escalated = result.finalText.startsWith(ESCALATE_PREFIX);

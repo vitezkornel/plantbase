@@ -75,18 +75,17 @@ describe('executeListCategories — DB dispatch and error handling (mocked)', ()
   });
 });
 
-describe('listCategoriesTool — Anthropic-facing definition', () => {
-  it('declares the tool name and an empty, parameter-less input schema', async () => {
+describe('listCategoriesTool — AI SDK tool definition', () => {
+  it('declares the tool name constant and reuses the empty, parameter-less Zod schema', async () => {
     const { listCategoriesTool, LIST_CATEGORIES_TOOL_NAME } = await import(
       './list-categories-tool.js'
     );
+    const { ListCategoriesInputSchema } = await import(
+      './list-categories-schema.js'
+    );
 
-    expect(listCategoriesTool.definition.name).toBe(LIST_CATEGORIES_TOOL_NAME);
-    expect(listCategoriesTool.definition.name).toBe('listCategories');
-    expect(listCategoriesTool.definition.input_schema).toEqual({
-      type: 'object',
-      properties: {},
-    });
+    expect(LIST_CATEGORIES_TOOL_NAME).toBe('listCategories');
+    expect(listCategoriesTool.inputSchema).toBe(ListCategoriesInputSchema);
   });
 });
 

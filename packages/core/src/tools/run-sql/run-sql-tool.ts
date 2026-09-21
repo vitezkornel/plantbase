@@ -8,7 +8,8 @@
 // this ONE tool needs lives in this ONE directory (konvenciok.md: "egy
 // fogalom = egy könyvtár, benne MINDEN hozzávalója").
 
-import type { AgentTool, ToolOutcome } from '../tool-outcome.js';
+import { tool } from 'ai';
+import type { ToolOutcome } from '../tool-outcome.js';
 import { runReadonlyQuery } from '../readonly-db-client.js';
 import { RunSqlInputSchema } from './run-sql-schema.js';
 import { guardReadOnlySql } from './sql-guard.js';
@@ -49,27 +50,13 @@ export async function executeRunSql(rawInput: unknown): Promise<ToolOutcome> {
   }
 }
 
-export const runSqlTool: AgentTool = {
-  definition: {
-    name: RUN_SQL_TOOL_NAME,
-    description:
-      'Read-only SQL SELECT lekérdezést futtat a Plantbase katalógus products táblája ' +
-      'felett, és visszaadja a sorokat. CSAK egyetlen SELECT (vagy SELECT-re vezető WITH) ' +
-      'statement engedélyezett — INSERT/UPDATE/DELETE/DDL és több, pontosvesszővel ' +
-      'elválasztott statement el lesz utasítva. A generált SQL-t mindig ezzel a toollal ' +
-      'futtasd le, ne csak írd ki szövegként.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        sql: {
-          type: 'string',
-          description:
-            'Egyetlen, read-only SELECT (vagy SELECT-re vezető WITH) statement, ami a ' +
-            'products táblát kérdezi le. Mindig tartalmazzon LIMIT-et.',
-        },
-      },
-      required: ['sql'],
-    },
-  },
+export const runSqlTool = tool({
+  description:
+    'Read-only SQL SELECT lekérdezést futtat a Plantbase katalógus products táblája ' +
+    'felett, és visszaadja a sorokat. CSAK egyetlen SELECT (vagy SELECT-re vezető WITH) ' +
+    'statement engedélyezett — INSERT/UPDATE/DELETE/DDL és több, pontosvesszővel ' +
+    'elválasztott statement el lesz utasítva. A generált SQL-t mindig ezzel a toollal ' +
+    'futtasd le, ne csak írd ki szövegként.',
+  inputSchema: RunSqlInputSchema,
   execute: executeRunSql,
-};
+});

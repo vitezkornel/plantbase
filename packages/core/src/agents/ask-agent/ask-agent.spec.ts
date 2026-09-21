@@ -1,5 +1,5 @@
-import type Anthropic from '@anthropic-ai/sdk';
 import { readFile, rm } from 'node:fs/promises';
+import { MockLanguageModelV2 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { askAgent } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
@@ -17,68 +17,79 @@ vi.mock('../../tools/readonly-db-client.js', () => ({
   closeReadonlyPool: vi.fn(),
 }));
 
-function makeClient(text: string): Anthropic {
+const usage = { inputTokens: 20, outputTokens: 8, totalTokens: 28 };
+
+function textPart(text: string) {
+  return { type: 'text' as const, text };
+}
+
+function toolCallPart(toolName: string, input: unknown, toolCallId = 'tool_1') {
   return {
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text, citations: null }],
-        stop_reason: 'end_turn',
-        usage: { input_tokens: 20, output_tokens: 8 },
-      }),
-    },
-  } as unknown as Anthropic;
+    type: 'tool-call' as const,
+    toolCallId,
+    toolName,
+    input: JSON.stringify(input),
+  };
+}
+
+function makeModel(text: string) {
+  return new MockLanguageModelV2({
+    doGenerate: { finishReason: 'stop', usage, warnings: [], content: [textPart(text)] },
+  });
 }
 
 /** Simulates one runSql tool round-trip before the model's final answer. */
-function makeToolUsingClient(sql: string, finalText: string): Anthropic {
-  const create = vi
-    .fn()
-    .mockResolvedValueOnce({
-      content: [
-        { type: 'tool_use', id: 'tool_1', name: 'runSql', input: { sql } },
-      ],
-      stop_reason: 'tool_use',
-      usage: { input_tokens: 30, output_tokens: 12 },
-    })
-    .mockResolvedValueOnce({
-      content: [{ type: 'text', text: finalText, citations: null }],
-      stop_reason: 'end_turn',
-      usage: { input_tokens: 15, output_tokens: 6 },
-    });
-  return { messages: { create } } as unknown as Anthropic;
+function makeToolUsingModel(sql: string, finalText: string) {
+  return new MockLanguageModelV2({
+    doGenerate: [
+      {
+        finishReason: 'tool-calls',
+        usage: { inputTokens: 30, outputTokens: 12, totalTokens: 42 },
+        warnings: [],
+        content: [toolCallPart('runSql', { sql })],
+      },
+      {
+        finishReason: 'stop',
+        usage: { inputTokens: 15, outputTokens: 6, totalTokens: 21 },
+        warnings: [],
+        content: [textPart(finalText)],
+      },
+    ],
+  });
 }
 
 /** Simulates one listCategories tool round-trip before the model's final answer. */
-function makeListCategoriesUsingClient(finalText: string): Anthropic {
-  const create = vi
-    .fn()
-    .mockResolvedValueOnce({
-      content: [
-        { type: 'tool_use', id: 'tool_1', name: 'listCategories', input: {} },
-      ],
-      stop_reason: 'tool_use',
-      usage: { input_tokens: 25, output_tokens: 10 },
-    })
-    .mockResolvedValueOnce({
-      content: [{ type: 'text', text: finalText, citations: null }],
-      stop_reason: 'end_turn',
-      usage: { input_tokens: 15, output_tokens: 6 },
-    });
-  return { messages: { create } } as unknown as Anthropic;
+function makeListCategoriesUsingModel(finalText: string) {
+  return new MockLanguageModelV2({
+    doGenerate: [
+      {
+        finishReason: 'tool-calls',
+        usage: { inputTokens: 25, outputTokens: 10, totalTokens: 35 },
+        warnings: [],
+        content: [toolCallPart('listCategories', {})],
+      },
+      {
+        finishReason: 'stop',
+        usage: { inputTokens: 15, outputTokens: 6, totalTokens: 21 },
+        warnings: [],
+        content: [textPart(finalText)],
+      },
+    ],
+  });
 }
 
 describe('askAgent', () => {
   it('rejects an empty question without calling the model', async () => {
-    const client = makeClient('unused');
+    const model = makeModel('unused');
 
-    await expect(askAgent('', { client })).rejects.toThrow();
-    expect(client.messages.create).not.toHaveBeenCalled();
+    await expect(askAgent('', { model })).rejects.toThrow();
+    expect(model.doGenerateCalls).toHaveLength(0);
   });
 
   it('returns the model answer, the system prompt, the message array, and usage', async () => {
-    const client = makeClient('Budapest a fővárosa.');
+    const model = makeModel('Budapest a fővárosa.');
 
-    const result = await askAgent('Mi Magyarország fővárosa?', { client });
+    const result = await askAgent('Mi Magyarország fővárosa?', { model });
 
     expect(result.answer).toBe('Budapest a fővárosa.');
     expect(result.system).toBe(ASK_AGENT_SYSTEM_PROMPT);
@@ -92,9 +103,9 @@ describe('askAgent', () => {
   });
 
   it('writes a JSONL log entry with system prompt, messages, response, and usage', async () => {
-    const client = makeClient('Ez egy teszt válasz.');
+    const model = makeModel('Ez egy teszt válasz.');
 
-    const result = await askAgent('teszt kérdés', { client });
+    const result = await askAgent('teszt kérdés', { model });
 
     const raw = await readFile(result.logPath, 'utf-8');
     const lines = raw.trim().split('\n');
@@ -116,54 +127,54 @@ describe('askAgent', () => {
   });
 
   it('dispatches a runSql tool_use round-trip and answers from the (mocked) DB result', async () => {
-    const client = makeToolUsingClient(
+    const model = makeToolUsingModel(
       'SELECT id, name FROM products LIMIT 5',
       'Íme néhány növény.',
     );
 
-    const result = await askAgent('mit ajánlasz?', { client });
+    const result = await askAgent('mit ajánlasz?', { model });
 
     expect(result.answer).toBe('Íme néhány növény.');
-    // transcript: user, assistant(tool_use), user(tool_result), assistant(text)
+    // transcript: user, assistant(tool-call), tool(tool-result), assistant(text)
     expect(result.messages).toHaveLength(4);
     expect(result.messages[1]).toMatchObject({
       role: 'assistant',
-      content: [{ type: 'tool_use', name: 'runSql' }],
+      content: [{ type: 'tool-call', toolName: 'runSql' }],
     });
     expect(result.messages[2]).toMatchObject({
-      role: 'user',
-      content: [{ type: 'tool_result', is_error: false }],
+      role: 'tool',
+      content: [{ type: 'tool-result', output: { type: 'json' } }],
     });
 
     await rm(result.logPath, { force: true });
   });
 
   it('dispatches a listCategories tool_use round-trip and answers from the (mocked) DB result', async () => {
-    const client = makeListCategoriesUsingClient('Ezek a kategóriáink.');
+    const model = makeListCategoriesUsingModel('Ezek a kategóriáink.');
 
-    const result = await askAgent('milyen kategóriák vannak?', { client });
+    const result = await askAgent('milyen kategóriák vannak?', { model });
 
     expect(result.answer).toBe('Ezek a kategóriáink.');
     expect(result.messages).toHaveLength(4);
     expect(result.messages[1]).toMatchObject({
       role: 'assistant',
-      content: [{ type: 'tool_use', name: 'listCategories' }],
+      content: [{ type: 'tool-call', toolName: 'listCategories' }],
     });
     expect(result.messages[2]).toMatchObject({
-      role: 'user',
-      content: [{ type: 'tool_result', is_error: false }],
+      role: 'tool',
+      content: [{ type: 'tool-result', output: { type: 'json' } }],
     });
 
     await rm(result.logPath, { force: true });
   });
 
   it('logs the generated SQL and its result alongside the existing fields', async () => {
-    const client = makeToolUsingClient(
+    const model = makeToolUsingModel(
       'SELECT id, name FROM products WHERE pet_safe = true LIMIT 5',
       'Íme néhány háziállat-barát növény.',
     );
 
-    const result = await askAgent('milyen növény háziállat-barát?', { client });
+    const result = await askAgent('milyen növény háziállat-barát?', { model });
 
     const raw = await readFile(result.logPath, 'utf-8');
     const entry = JSON.parse(raw.trim().split('\n')[0]);
@@ -181,11 +192,11 @@ describe('askAgent', () => {
   });
 
   it('strips the [ESCALATE] prefix and sets escalated=true', async () => {
-    const client = makeClient(
+    const model = makeModel(
       '[ESCALATE] Ebben nem tudok segíteni, de egy kollégánk hamarosan jelentkezik.',
     );
 
-    const result = await askAgent('Hol van a rendelésem?', { client });
+    const result = await askAgent('Hol van a rendelésem?', { model });
 
     expect(result.answer).toBe(
       'Ebben nem tudok segíteni, de egy kollégánk hamarosan jelentkezik.',
@@ -200,9 +211,9 @@ describe('askAgent', () => {
   });
 
   it('sets escalated=false for a normal (non-escalated) answer', async () => {
-    const client = makeClient('Budapest a fővárosa.');
+    const model = makeModel('Budapest a fővárosa.');
 
-    const result = await askAgent('Mi Magyarország fővárosa?', { client });
+    const result = await askAgent('Mi Magyarország fővárosa?', { model });
 
     expect(result.escalated).toBe(false);
 
