@@ -14,7 +14,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.102",
     "@anthropic-ai/sdk": "^0.111.0",
+    "ai": "^5.0.261",
     "cohere-ai": "^7.19.1",
     "dotenv": "^17.4.2",
     "pg": "^8.22.0",

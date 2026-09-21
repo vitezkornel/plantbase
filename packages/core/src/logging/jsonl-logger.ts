@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type Anthropic from '@anthropic-ai/sdk';
+import type { ModelMessage } from 'ai';
 import { REPO_ROOT } from '../config/repo-root.js';
 import type { ToolOutcome } from '../tools/tool-outcome.js';
 
@@ -43,7 +43,7 @@ export interface SqlCallLogEntry {
 export interface InteractionLogEntry {
   timestamp: string;
   system: string;
-  messages: Anthropic.MessageParam[];
+  messages: ModelMessage[];
   response: string;
   usage: AgentUsage;
   sqlCalls: SqlCallLogEntry[];

@@ -9,7 +9,13 @@
 import { z } from 'zod';
 
 export const RunSqlInputSchema = z.object({
-  sql: z.string().min(1, 'sql must not be empty'),
+  sql: z
+    .string()
+    .min(1, 'sql must not be empty')
+    .describe(
+      'Egyetlen, read-only SELECT (vagy SELECT-re vezető WITH) statement, ami a ' +
+        'products táblát kérdezi le. Mindig tartalmazzon LIMIT-et.',
+    ),
 });
 
 export type RunSqlInput = z.infer<typeof RunSqlInputSchema>;

@@ -8,8 +8,9 @@
 // client is shared with packages/rag's ingest side (embedTexts) since
 // query- and ingest-time embeddings must come from the same model/space.
 
+import { tool } from 'ai';
 import { embedTexts, type EmbedInputType } from 'rag';
-import type { AgentTool, ToolOutcome } from '../tool-outcome.js';
+import type { ToolOutcome } from '../tool-outcome.js';
 import { runReadonlyQuery } from '../readonly-db-client.js';
 import { rerankDocuments, type RerankedItem } from './cohere-rerank-client.js';
 import { generateHydePassage } from './hyde-generate.js';
@@ -131,25 +132,13 @@ export async function executeSearchKnowledge(
   }
 }
 
-export const searchKnowledgeTool: AgentTool = {
-  definition: {
-    name: SEARCH_KNOWLEDGE_TOOL_NAME,
-    description:
-      'A növénygondozási tudásbázisban (data/knowledge cikkek) keres HyDE + rerank ' +
-      'pipeline-nal. Ezt hívd, ha a kérdés ápolási/gondozási tanácsot kér, nem a ' +
-      'products katalógusra vonatkozik. A visszaadott találatok title/source mezőjét ' +
-      'mindig idézd forrásként a válaszban; ha a results tömb üres, mondd ki, hogy ' +
-      'nincs erről információd a tudásbázisban.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'A növénygondozási kérdés, a felhasználó saját szavaival.',
-        },
-      },
-      required: ['query'],
-    },
-  },
+export const searchKnowledgeTool = tool({
+  description:
+    'A növénygondozási tudásbázisban (data/knowledge cikkek) keres HyDE + rerank ' +
+    'pipeline-nal. Ezt hívd, ha a kérdés ápolási/gondozási tanácsot kér, nem a ' +
+    'products katalógusra vonatkozik. A visszaadott találatok title/source mezőjét ' +
+    'mindig idézd forrásként a válaszban; ha a results tömb üres, mondd ki, hogy ' +
+    'nincs erről információd a tudásbázisban.',
+  inputSchema: SearchKnowledgeInputSchema,
   execute: (rawInput) => executeSearchKnowledge(rawInput),
-};
+});

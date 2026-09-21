@@ -8,7 +8,8 @@
 // = egy könyvtár, benne MINDEN hozzávalója"); the read-only `pg` client is
 // shared with `runSql` from one level up (tools/readonly-db-client.ts).
 
-import type { AgentTool, ToolOutcome } from '../tool-outcome.js';
+import { tool } from 'ai';
+import type { ToolOutcome } from '../tool-outcome.js';
 import { runReadonlyQuery } from '../readonly-db-client.js';
 import { ListCategoriesInputSchema } from './list-categories-schema.js';
 
@@ -46,18 +47,12 @@ export async function executeListCategories(
   }
 }
 
-export const listCategoriesTool: AgentTool = {
-  definition: {
-    name: LIST_CATEGORIES_TOOL_NAME,
-    description:
-      'Visszaadja a Plantbase katalógusban ténylegesen előforduló egyedi kategóriákat ' +
-      '(products.category DISTINCT értékei). Nincs bemeneti paramétere. Ezt hívd, ha a ' +
-      'felhasználó a katalógusban elérhető kategóriákra/típusokra kérdez rá (pl. "milyen ' +
-      'kategóriák vannak?"), ahelyett hogy erre egyedi SQL-t írnál a runSql toollal.',
-    input_schema: {
-      type: 'object',
-      properties: {},
-    },
-  },
+export const listCategoriesTool = tool({
+  description:
+    'Visszaadja a Plantbase katalógusban ténylegesen előforduló egyedi kategóriákat ' +
+    '(products.category DISTINCT értékei). Nincs bemeneti paramétere. Ezt hívd, ha a ' +
+    'felhasználó a katalógusban elérhető kategóriákra/típusokra kérdez rá (pl. "milyen ' +
+    'kategóriák vannak?"), ahelyett hogy erre egyedi SQL-t írnál a runSql toollal.',
+  inputSchema: ListCategoriesInputSchema,
   execute: executeListCategories,
-};
+});

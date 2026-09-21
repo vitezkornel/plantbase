@@ -133,12 +133,22 @@ describe('executeSearchKnowledge — live DATABASE_URL_READONLY + write path int
   });
 });
 
-describe('searchKnowledgeTool — Anthropic-facing definition', () => {
-  it('declares the tool name and a required query input', () => {
-    expect(searchKnowledgeTool.definition.name).toBe('searchKnowledge');
-    expect(searchKnowledgeTool.definition.input_schema).toMatchObject({
-      type: 'object',
-      required: ['query'],
-    });
+describe('searchKnowledgeTool — AI SDK tool definition', () => {
+  it('declares the tool name constant and reuses the query-required Zod schema', async () => {
+    const { SEARCH_KNOWLEDGE_TOOL_NAME } = await import('./search-knowledge-tool.js');
+    const { SearchKnowledgeInputSchema } = await import('./search-knowledge-schema.js');
+
+    expect(SEARCH_KNOWLEDGE_TOOL_NAME).toBe('searchKnowledge');
+    expect(searchKnowledgeTool.inputSchema).toBe(SearchKnowledgeInputSchema);
+  });
+
+  it('preserves the exact Hungarian description text verbatim (prompt-engineering content)', () => {
+    expect(searchKnowledgeTool.description).toBe(
+      'A növénygondozási tudásbázisban (data/knowledge cikkek) keres HyDE + rerank ' +
+        'pipeline-nal. Ezt hívd, ha a kérdés ápolási/gondozási tanácsot kér, nem a ' +
+        'products katalógusra vonatkozik. A visszaadott találatok title/source mezőjét ' +
+        'mindig idézd forrásként a válaszban; ha a results tömb üres, mondd ki, hogy ' +
+        'nincs erről információd a tudásbázisban.',
+    );
   });
 });

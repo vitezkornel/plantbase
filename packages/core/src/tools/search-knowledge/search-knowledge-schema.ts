@@ -7,7 +7,10 @@
 import { z } from 'zod';
 
 export const SearchKnowledgeInputSchema = z.object({
-  query: z.string().min(1, 'query must not be empty'),
+  query: z
+    .string()
+    .min(1, 'query must not be empty')
+    .describe('A növénygondozási kérdés, a felhasználó saját szavaival.'),
 });
 
 export type SearchKnowledgeInput = z.infer<typeof SearchKnowledgeInputSchema>;

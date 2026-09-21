@@ -8,22 +8,15 @@
 // A tool's execution can fail for reasons the MODEL should hear about and
 // react to (bad input, a guard rejection, a DB error) — those are not
 // exceptions to throw and crash the request; they are normal outcomes fed
-// back to the model as a `tool_result` so it can explain itself gracefully
+// back to the model as a tool result so it can explain itself gracefully
 // (see run-sql/sql-guard.ts and run-sql/run-sql-tool.ts for the concrete
-// case this exists for). `AgentTool` bundles a tool's Anthropic-facing
-// definition with the function that actually runs it, so `agent-loop.ts`
-// can dispatch by name without a separate central registry — the `tools`
-// array passed into the loop *is* the registry (konvenciok.md: "Ne legyen
-// központi dispatch/registry, amit párhuzamosan kell karbantartani.").
-
-import type Anthropic from '@anthropic-ai/sdk';
+// case this exists for). Each tool is built with the `ai` package's own
+// `tool()` helper (Zod `inputSchema` in, model-facing JSON Schema derived
+// automatically) and registered by name as a key in the `tools` record
+// passed into `generateText` — that record itself *is* the dispatch
+// registry (konvenciok.md: "Ne legyen központi dispatch/registry, amit
+// párhuzamosan kell karbantartani."), so no separate `AgentTool` wrapper
+// type is needed any more.
 
 export type ToolOutcome =
   { ok: true; data: unknown } | { ok: false; error: string };
-
-export interface AgentTool {
-  /** The Anthropic-facing tool definition (name, description, input schema). */
-  definition: Anthropic.Tool;
-  /** Runs the tool for one `tool_use` block's (unknown, unvalidated) input. */
-  execute: (input: unknown) => Promise<ToolOutcome>;
-}
