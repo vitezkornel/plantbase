@@ -16,6 +16,36 @@ function loadCleanedArticle(fileName: string) {
 }
 
 describe('chunkArticle', () => {
+  // Root cause of a whole-suite regression found while debugging this file
+  // (see PR/issue history): `data/knowledge/*.md` fixtures are stored as
+  // LF in git, but on a checkout with `core.autocrlf=true` (a common
+  // Git-for-Windows default) they land on disk as CRLF. `HEADING_LINE_
+  // PATTERN`'s `$`-anchor never matched a line with a trailing `\r`, so
+  // every heading went undetected and the whole article collapsed into
+  // one section — not a stale test expectation, a real robustness gap:
+  // real-world article content (pasted/exported from Windows tools) can
+  // legitimately contain CRLF too. This test is a synthetic, disk- and
+  // git-config-independent regression guard for that normalization.
+  it('splits sections correctly even when the source body uses CRLF line endings', () => {
+    const body = [
+      '##### First heading',
+      '',
+      'First content.',
+      '',
+      '##### Second heading',
+      '',
+      'Second content.',
+    ].join('\r\n');
+
+    const chunks = chunkArticle({ title: 'CRLF teszt', source: 'test://x', body });
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]?.sectionPath).toBe('First heading');
+    expect(chunks[0]?.content).toContain('First content.');
+    expect(chunks[1]?.sectionPath).toBe('Second heading');
+    expect(chunks[1]?.content).toContain('Second content.');
+  });
+
   it('keeps a sequential steps list in a single chunk (Minta B)', () => {
     const article = loadCleanedArticle('care-miscellaneous__grow-pot.md');
 
