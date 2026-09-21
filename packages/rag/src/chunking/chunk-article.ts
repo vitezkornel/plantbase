@@ -37,7 +37,7 @@ export function chunkArticle({
   source,
   body,
 }: ChunkArticleInput): Chunk[] {
-  const sections = splitIntoSections(body, title);
+  const sections = splitIntoSections(normalizeLineEndings(body), title);
 
   const chunks: Chunk[] = [];
   for (const section of sections) {
@@ -47,6 +47,19 @@ export function chunkArticle({
     chunks.push(...sectionToChunks(section, title, source));
   }
   return chunks;
+}
+
+/**
+ * `HEADING_LINE_PATTERN` (and other line-based patterns below) anchor on
+ * `$`/end-of-line, which never matches while a trailing `\r` is still
+ * there — so a CRLF- (or old-Mac CR-)terminated body would silently fail
+ * to split at all. Article content can legitimately arrive with either
+ * line-ending style (pasted/exported from Windows tools, or checked out
+ * on a machine with `core.autocrlf=true`), so this normalizes once, up
+ * front, rather than trying to make every downstream regex CRLF-aware.
+ */
+function normalizeLineEndings(body: string): string {
+  return body.replace(/\r\n?/g, '\n');
 }
 
 function splitIntoSections(body: string, title: string): Section[] {
