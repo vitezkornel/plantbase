@@ -83,7 +83,10 @@ export async function runAgentLoop(
     messages,
     tools,
     maxOutputTokens: maxTokens,
-    stopWhen: stepCountIs(MAX_ITERATIONS),
+    // The unknown-tool condition stops the loop right after the offending
+    // step instead of letting the SDK spend one more model round-trip
+    // trying to let the model recover from our own wiring bug.
+    stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
   });
 
   assertNoUnknownToolRequests(result.steps);
@@ -112,6 +115,26 @@ export async function runAgentLoop(
 }
 
 type GenerateTextSteps = Awaited<ReturnType<typeof generateText>>['steps'];
+type GenerateTextStep = GenerateTextSteps[number];
+type StepContentPart = GenerateTextStep['content'][number];
+
+function isUnknownToolCall(
+  part: StepContentPart,
+): part is Extract<StepContentPart, { type: 'tool-call' }> {
+  return part.type === 'tool-call' && NoSuchToolError.isInstance(part.error);
+}
+
+/**
+ * A `StopCondition` (see `stopWhen` above): stop the multi-step loop right
+ * after a step where the model requested an unregistered tool, instead of
+ * spending one more model round-trip letting the SDK's default "feed the
+ * error back and let the model retry" behavior play out — this is our own
+ * wiring bug, not something the model can meaningfully recover from.
+ */
+function hasUnknownToolRequest({ steps }: { steps: GenerateTextSteps }): boolean {
+  const lastStep = steps.at(-1);
+  return lastStep !== undefined && lastStep.content.some(isUnknownToolCall);
+}
 
 /**
  * The model is only ever offered the tool names in `tools`, so it asking
@@ -122,29 +145,53 @@ type GenerateTextSteps = Awaited<ReturnType<typeof generateText>>['steps'];
 function assertNoUnknownToolRequests(steps: GenerateTextSteps): void {
   for (const step of steps) {
     for (const part of step.content) {
-      if (part.type === 'tool-call' && NoSuchToolError.isInstance(part.error)) {
+      if (isUnknownToolCall(part)) {
         throw new Error(`Model requested unknown tool "${part.toolName}".`);
       }
     }
   }
 }
 
+/**
+ * Reconstructs one tool call's outcome by scanning the step's `content`
+ * directly (rather than the higher-level `toolResults`/`toolCalls`
+ * convenience arrays) — a call the `ai` package itself rejected before our
+ * tool's `execute` ran (invalid input, a `NoSuchToolError`) never gets a
+ * `tool-result` entry, only a `tool-error` one, so relying on `toolResults`
+ * alone silently drops the real validation detail behind a placeholder.
+ */
 function extractToolCalls(steps: GenerateTextSteps): ToolCallRecord[] {
   const records: ToolCallRecord[] = [];
 
   for (const step of steps) {
-    for (const call of step.toolCalls) {
-      const matchingResult = step.toolResults.find(
-        (candidate) => candidate.toolCallId === call.toolCallId,
-      );
-      const outcome: ToolOutcome =
-        matchingResult && 'output' in matchingResult
-          ? (matchingResult.output as ToolOutcome)
-          : { ok: false, error: 'Tool call did not produce a result.' };
+    for (const part of step.content) {
+      if (part.type !== 'tool-call') continue;
 
-      records.push({ name: call.toolName, input: call.input, outcome });
+      const resultPart = step.content.find(
+        (candidate): candidate is Extract<StepContentPart, { type: 'tool-result' | 'tool-error' }> =>
+          (candidate.type === 'tool-result' || candidate.type === 'tool-error') &&
+          candidate.toolCallId === part.toolCallId,
+      );
+
+      const outcome: ToolOutcome =
+        resultPart?.type === 'tool-result'
+          ? (resultPart.output as ToolOutcome)
+          : {
+              ok: false,
+              error: resultPart
+                ? errorMessage(resultPart.error)
+                : 'Tool call did not produce a result.',
+            };
+
+      records.push({ name: part.toolName, input: part.input, outcome });
     }
   }
 
   return records;
+}
+
+function errorMessage(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message;
+  return String(error);
 }

@@ -75,7 +75,7 @@ describe('runAgentLoop', () => {
     expect(result.finalText).toBe('Part one. Part two.');
   });
 
-  it('throws when the model asks for a tool but none is registered', async () => {
+  it('throws when the model asks for a tool but none is registered, without burning a second model round-trip', async () => {
     const model = makeModel([
       step('tool-calls', [toolCallPart('runSql', {})]),
       step('stop', [textPart('recovered')]),
@@ -84,9 +84,12 @@ describe('runAgentLoop', () => {
     await expect(runAgentLoop({ model, ...baseInput })).rejects.toThrow(
       /unknown tool/i,
     );
+    // stopWhen must cut the loop short right after the unknown-tool step —
+    // the second scripted ('recovered') response must never be consumed.
+    expect(model.doGenerateCalls).toHaveLength(1);
   });
 
-  it('throws when the model requests a tool name that is not registered', async () => {
+  it('throws when the model requests a tool name that is not registered, without burning a second model round-trip', async () => {
     const tools = { runSql: makeTool(vi.fn()) };
     const model = makeModel([
       step('tool-calls', [toolCallPart('someOtherTool', {})]),
@@ -96,6 +99,7 @@ describe('runAgentLoop', () => {
     await expect(runAgentLoop({ model, ...baseInput, tools })).rejects.toThrow(
       /unknown tool/i,
     );
+    expect(model.doGenerateCalls).toHaveLength(1);
   });
 
   it('throws when the response has no text content', async () => {
@@ -168,6 +172,33 @@ describe('runAgentLoop', () => {
       ok: false,
       error: 'Csak SELECT engedélyezett.',
     });
+  });
+
+  it('records the real SDK validation error (not a generic placeholder) when the model sends input violating the tool schema', async () => {
+    const strictTool = tool({
+      description: 'needs a required field',
+      inputSchema: z.object({ sql: z.string() }),
+      execute: vi.fn(),
+    });
+    const tools = { runSql: strictTool };
+
+    const model = makeModel([
+      // Missing the required `sql` field — rejected by the SDK's own
+      // schema validation before `execute` is ever called.
+      step('tool-calls', [toolCallPart('runSql', { wrong: 'field' })]),
+      step('stop', [textPart('recovered')]),
+    ]);
+
+    const result = await runAgentLoop({ model, ...baseInput, tools });
+
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].outcome.ok).toBe(false);
+    if (!result.toolCalls[0].outcome.ok) {
+      expect(result.toolCalls[0].outcome.error).not.toBe(
+        'Tool call did not produce a result.',
+      );
+      expect(result.toolCalls[0].outcome.error).toMatch(/sql/i);
+    }
   });
 
   it('throws once the max-iteration cap is hit instead of looping forever', async () => {
