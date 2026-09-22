@@ -8,6 +8,10 @@ import {
   type SqlCallLogEntry,
 } from '../../logging/jsonl-logger.js';
 import {
+  CUSTOMER_PREFERENCES_TOOL_NAME,
+  customerPreferencesTool,
+} from '../../tools/customer-preferences/customer-preferences-tool.js';
+import {
   LIST_CATEGORIES_TOOL_NAME,
   listCategoriesTool,
 } from '../../tools/list-categories/list-categories-tool.js';
@@ -79,6 +83,7 @@ export async function askAgent(
       [RUN_SQL_TOOL_NAME]: runSqlTool,
       [LIST_CATEGORIES_TOOL_NAME]: listCategoriesTool,
       [SEARCH_KNOWLEDGE_TOOL_NAME]: searchKnowledgeTool,
+      [CUSTOMER_PREFERENCES_TOOL_NAME]: customerPreferencesTool,
     },
   });
 
