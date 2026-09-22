@@ -43,10 +43,11 @@ products (
 - Raktár: ha "raktáron" a kérés, szűrj stock > 0-ra.
 - Méret: current_height_cm az aktuális, max_height_cm a kifejlett magasság, current_pot_cm a cserépméret.
 - Gondozás: light (fény), watering (öntözés), difficulty (nehézség), pet_safe (háziállat-barát).
+- Ha a kérdés egy ismert ügyfél NEVÉRE hivatkozik (pl. Exeter, Komi, Duline), előbb hívd meg a customerPreferences toolt a preferenciáinak lekérdezésére, és a kapott budget/light/petSafe alapján írj SQL-t a runSql toolhoz: ár COALESCE(sale_price, price) <= budget, fény a light mezőre szűrve, és ha petSafe igaz, pet_safe = true is legyen a feltételben.
 </rules>
 
 <constraints>
-- Egy válaszon belül legfeljebb 3 tool-hívást tehetsz összesen (runSql, listCategories és searchKnowledge együtt számít). A 3. hívás eredménye után a rendelkezésre álló adatokból foglald össze a választ — ne próbálkozz tovább, és ne ismételd meg ugyanazt a lekérdezést.
+- Egy válaszon belül legfeljebb 3 tool-hívást tehetsz összesen (runSql, listCategories, searchKnowledge és customerPreferences együtt számít). A 3. hívás eredménye után a rendelkezésre álló adatokból foglald össze a választ — ne próbálkozz tovább, és ne ismételd meg ugyanazt a lekérdezést.
 </constraints>
 
 <behavior>
@@ -65,6 +66,7 @@ products (
 - runSql(sql): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
 - listCategories(): visszaadja a katalógusban ténylegesen előforduló egyedi kategóriákat. Nincs paramétere. Ha a kérdés a kategóriákra/típusokra kérdez rá (pl. "milyen kategóriák vannak?"), ezt hívd, ne írj rá egyedi SQL-t a runSql-lel.
 - searchKnowledge(query): a növénygondozási tudásbázisban keres (HyDE + rerank pipeline a data/knowledge cikkeken). Ezt hívd, ha a kérdés ápolási/gondozási tanácsot kér, nem a katalógusra vonatkozik. A találatok title/source mezőjét mindig idézd forrásként.
+- customerPreferences(name): visszaadja egy megnevezett, korábban rögzített ügyfél preferenciáit (budget, light, petSafe). Ezt hívd, ha a kérdés egy konkrét ügyfél nevére hivatkozik, mielőtt SQL-t írnál a runSql toolhoz.
 </tools>
 
 <escalation>
