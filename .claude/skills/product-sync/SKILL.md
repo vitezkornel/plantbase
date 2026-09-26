@@ -142,3 +142,11 @@ Zárásként a felhasználónak röviden: forrás(ok), a kérés szerinti szűk�
 ## Ha változik a domain-modell
 
 A skill a `docs/ddd/glossary.md` értékkészleteit használja (az `upsert.mjs` `ALLOWED` táblája is). Ha azok változnak, ezt a skillt és a scriptet is igazítsd.
+
+## Ismert korlátok
+
+A tesztkörök (3 dry-run eval, 95%) alapján ezek futásonként eltérően alakulhatnak; egyelőre nem javítottuk őket, élesítés előtt érdemes kézzel ránézni:
+
+- **Kategória-kétértelműség:** a `category` szabály nem mondja ki, hogy a cím egy jelzője (pl. „Kapaszkodó / Creeping”) elég-e a `lógó` kategóriához, ha nincs rá címke vagy terméktípus. Ugyanaz a termék (Ficus pumila) egyik futásban `szobanövény`, másikban `lógó` lett.
+- **Az `excluded` lista félrecímkézése:** a modell nem csomag tételt is az `excluded` tömbbe tehet (pl. egy „Akciós” címkéjű, de valódi leárazás nélküli terméket), a riport viszont minden `excluded` tételt „kizárt csomag”-ként számol és mutat — így a „kizárt csomag” szám nagyobb lehet a tényleges csomagok számánál.
+- **Több növényt tartalmazó tétel csak a leírásból felismerve:** ha a cím és a variáns nem jelzi, de a szabad szöveg igen (pl. a Romeo cherry egy cserépben a Juliet cherryvel), a modell kizárhatja a leírás alapján — ez túlmegy a „cím vagy variáns” szabályon, és futásonként eltérhet.
