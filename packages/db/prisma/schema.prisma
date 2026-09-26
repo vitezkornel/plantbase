@@ -36,7 +36,13 @@ model Product {
   rating          Decimal? // 0-5
   reviewsCount    Int?     @map("reviews_count")
   description     String?
+  // Feed-eredet (product-sync skill): melyik webshop-feedből jön és ott mi a
+  // handle-je. A seed-termékeknél mindkettő null; a párosuk az upsert kulcsa
+  // (Postgres-ben a NULL-ok nem ütköznek, így a seed-sorok nem érintettek).
+  source          String? // pl. tropicalhome.hu / thesill.com
+  sourceHandle    String?  @map("source_handle") // a feedbeli Shopify handle
 
+  @@unique([source, sourceHandle])
   @@map("products")
 }
 

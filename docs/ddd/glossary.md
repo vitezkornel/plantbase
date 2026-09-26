@@ -4,31 +4,34 @@
 
 ## Termék (katalógus)
 
-| Fogalom                  | Kód               | DB                            | Jelentés / megengedett értékek                                                                |
-| ------------------------ | ----------------- | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| Termék (növény)          | `Product`         | `products`                    | A webshop katalógusának egy tétele.                                                           |
-| Köznapi név              | `name`            | `name`                        | A növény magyar/köznapi neve.                                                                 |
-| Latin név                | `latinName`       | `latin_name`                  | Tudományos név.                                                                               |
-| Kategória                | `category`        | `category`                    | `szobanövény` / `kerti` / `pozsgás` / `kaktusz` / `fűszer` / `fa-cserje` / `lógó` / `virágzó` |
-| Helyszín                 | `location`        | `location`                    | `beltéri` / `kültéri` / `mindkettő`                                                           |
-| Ár                       | `price`           | `price`                       | Listaár, Ft.                                                                                  |
-| Akciós ár                | `salePrice`       | `sale_price`                  | Akció esetén a csökkentett ár (Ft), különben `null`.                                          |
-| Akciós termék            | –                 | `sale_price < price`          | Az a termék, amelynek akciós ára kisebb a listaáránál.                                        |
-| Tényleges ár             | –                 | `COALESCE(sale_price, price)` | Az ár, amivel a vásárló fizet; költségkeretnél (büdzsé) ezzel számolunk.                      |
-| Raktárkészlet            | `stock`           | `stock`                       | Darabszám.                                                                                    |
-| Raktáron                 | –                 | `stock > 0`                   | Van belőle legalább egy darab.                                                                |
-| Fényigény                | `light`           | `light`                       | `árnyék` / `alacsony` / `közepes` / `erős` / `direkt nap`                                     |
-| Öntözés                  | `watering`        | `watering`                    | `ritka` / `közepes` / `gyakori` / `állandóan nedves`                                          |
-| Nehézség                 | `difficulty`      | `difficulty`                  | `kezdő` / `haladó` / `profi`                                                                  |
-| Aktuális magasság        | `currentHeightCm` | `current_height_cm`           | cm                                                                                            |
-| Kifejlett (max) magasság | `maxHeightCm`     | `max_height_cm`               | cm                                                                                            |
-| Cserépméret              | `currentPotCm`    | `current_pot_cm`              | Aktuális cserép, cm.                                                                          |
-| Háziállat-barát          | `petSafe`         | `pet_safe`                    | igen/nem                                                                                      |
-| Gyerekbiztos             | `kidSafe`         | `kid_safe`                    | igen/nem (nem mérgező)                                                                        |
-| Légtisztító              | `airPurifying`    | `air_purifying`               | igen/nem                                                                                      |
-| Értékelés                | `rating`          | `rating`                      | 0–5                                                                                           |
-| Értékelések száma        | `reviewsCount`    | `reviews_count`               | darab                                                                                         |
-| Leírás                   | `description`     | `description`                 | Szabad szöveg.                                                                                |
+| Fogalom                       | Kód               | DB                            | Jelentés / megengedett értékek                                                                                                                         |
+| ----------------------------- | ----------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Termék (növény)               | `Product`         | `products`                    | A webshop katalógusának egy tétele.                                                                                                                    |
+| Köznapi név                   | `name`            | `name`                        | A növény magyar/köznapi neve.                                                                                                                          |
+| Latin név                     | `latinName`       | `latin_name`                  | Tudományos név.                                                                                                                                        |
+| Kategória                     | `category`        | `category`                    | `szobanövény` / `kerti` / `pozsgás` / `kaktusz` / `fűszer` / `fa-cserje` / `lógó` / `virágzó`                                                          |
+| Helyszín                      | `location`        | `location`                    | `beltéri` / `kültéri` / `mindkettő`                                                                                                                    |
+| Ár                            | `price`           | `price`                       | Listaár, Ft.                                                                                                                                           |
+| Akciós ár                     | `salePrice`       | `sale_price`                  | Akció esetén a csökkentett ár (Ft), különben `null`.                                                                                                   |
+| Akciós termék                 | –                 | `sale_price < price`          | Az a termék, amelynek akciós ára kisebb a listaáránál.                                                                                                 |
+| Tényleges ár                  | –                 | `COALESCE(sale_price, price)` | Az ár, amivel a vásárló fizet; költségkeretnél (büdzsé) ezzel számolunk.                                                                               |
+| Raktárkészlet                 | `stock`           | `stock`                       | Darabszám. Feedes terméknél (`source` nem `null`) csak elérhetőség: `1` = elérhető, `0` = nem; nem valós darabszám.                                    |
+| Raktáron                      | –                 | `stock > 0`                   | Van belőle legalább egy darab.                                                                                                                         |
+| Fényigény                     | `light`           | `light`                       | `árnyék` / `alacsony` / `közepes` / `erős` / `direkt nap`                                                                                              |
+| Öntözés                       | `watering`        | `watering`                    | `ritka` / `közepes` / `gyakori` / `állandóan nedves`                                                                                                   |
+| Nehézség                      | `difficulty`      | `difficulty`                  | `kezdő` / `haladó` / `profi`                                                                                                                           |
+| Aktuális magasság             | `currentHeightCm` | `current_height_cm`           | cm                                                                                                                                                     |
+| Kifejlett (max) magasság      | `maxHeightCm`     | `max_height_cm`               | cm                                                                                                                                                     |
+| Cserépméret                   | `currentPotCm`    | `current_pot_cm`              | Aktuális cserép, cm.                                                                                                                                   |
+| Háziállat-barát               | `petSafe`         | `pet_safe`                    | igen/nem                                                                                                                                               |
+| Gyerekbiztos                  | `kidSafe`         | `kid_safe`                    | igen/nem (nem mérgező)                                                                                                                                 |
+| Légtisztító                   | `airPurifying`    | `air_purifying`               | igen/nem                                                                                                                                               |
+| Értékelés                     | `rating`          | `rating`                      | 0–5                                                                                                                                                    |
+| Értékelések száma             | `reviewsCount`    | `reviews_count`               | darab                                                                                                                                                  |
+| Leírás                        | `description`     | `description`                 | Szabad szöveg.                                                                                                                                         |
+| Feed-forrás                   | `source`          | `source`                      | A webshop-feed, ahonnan a termék jön: `tropicalhome.hu` / `thesill.com`; seed-terméknél `null`. Nem azonos a tudásbázis `source` (cikk-URL) mezőjével. |
+| Feed-handle                   | `sourceHandle`    | `source_handle`               | A termék azonosítója (Shopify handle) a feedben; seed-terméknél `null`.                                                                                |
+| Feed-azonosító (upsert-kulcs) | –                 | `(source, source_handle)`     | Egyedi pár; a `product-sync` skill ez alapján frissíti a meglévő feedes termékeket.                                                                    |
 
 ## Ügyfél
 

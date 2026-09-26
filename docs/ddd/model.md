@@ -16,6 +16,7 @@ A központi entitás: a webshop katalógusának egy növénye. Forrás: `package
 - **Méret:** `currentHeightCm`, `maxHeightCm`, `currentPotCm`.
 - **Tulajdonságok:** `petSafe`, `kidSafe`, `airPurifying`.
 - **Visszajelzés:** `rating`, `reviewsCount`.
+- **Feed-eredet:** `source`, `sourceHandle` — melyik webshop-feedből jön a termék (a `product-sync` skill tölti), és ott mi a handle-je. A seed-termékeknél mindkettő `null`.
 
 ### Ügyfélpreferencia (`CustomerPreference`) — ideiglenes, egyszerűsített modell
 
@@ -40,6 +41,8 @@ Növénygondozási cikk egy szakasza, forrás-hivatkozással (`title`, `source`)
 - **Akciós termék:** akciós az a termék, amelynek `sale_price < price`. Ha nincs akció, `sale_price` `null`.
 - **Tényleges ár:** `COALESCE(sale_price, price)`; minden költségkeret-számítás ezzel történik.
 - **Raktáron:** `stock > 0`.
+- **Készlet feedes terméknél:** ha a termék feedből jön (`source` nem `null`), a `stock` **csak elérhetőséget** jelent — `1` = a webshopban elérhető, `0` = nem elérhető —, nem valós darabszámot (a feedek nem adnak darabszámot). A „raktáron” szabály így rájuk is működik, de a `stock` értékéből mennyiség nem olvasható ki.
+- **Feed-azonosítás (upsert-kulcs):** a `(source, source_handle)` pár egyedi; ez alapján frissíti a `product-sync` a már meglévő feedes termékeket. A seed-termékeknél mindkettő `null`, ezért nem ütköznek egymással (Postgres-ben a `NULL`-ok nem számítanak egyezésnek).
 - **Fényigény-egyezés:** ügyfélpreferencia alapján alapértelmezésben pontos egyezés; szomszédos fényszintek (pl. `erős` ↔ `direkt nap`) nem számítanak egyezésnek.
 - **Értékkészletek:** a kategorikus mezők (`category`, `location`, `light`, `watering`, `difficulty`) szabad szöveges oszlopok; az értékkészletet csak konvenció rögzíti (séma-kommentek, a seed TypeScript-típusa, a system prompt) — nincs DB-szintű enum vagy CHECK constraint.
 - **Kitöltöttség:** a DB-ben minden `products` oszlop nullable; a seed minden mezőt kitölt, kivéve a `sale_price`-t.
