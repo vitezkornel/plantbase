@@ -93,6 +93,13 @@ function render(r) {
           `<tr><td>${nameCell(p)}</td><td>${esc(p.source)}</td><td class="num"><del>${huf(p.price)}</del></td><td class="num">${huf(p.salePrice)}</td><td class="num"><span class="badge">−${discount(p)}%</span></td></tr>`,
       ),
   );
+  const excluded = table(
+    ['Tétel', 'Forrás', 'Ok'],
+    (r.excluded ?? []).map(
+      (p) =>
+        `<tr><td>${nameCell(p)}</td><td>${esc(p.source)}</td><td>${esc(p.reason)}</td></tr>`,
+    ),
+  );
   const warnings = r.warnings.length
     ? `<ul class="warnings">${r.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>`
     : '<p class="empty">Nincs figyelmeztetés.</p>';
@@ -146,10 +153,12 @@ function render(r) {
     <div class="stat"><b>${r.counts.updated}</b><span>változott</span></div>
     <div class="stat"><b>${r.counts.onSale}</b><span>akciós</span></div>
     <div class="stat"><b>${r.counts.unchanged}</b><span>változatlan</span></div>
+    <div class="stat"><b>${r.counts.excluded ?? 0}</b><span>kizárt csomag</span></div>
   </div>
   <h2>Új termékek</h2>${inserted}
   <h2>Változott termékek</h2>${updated}
   <h2>Akciós termékek</h2>${onSale}
+  <h2>Kizárt tételek (csomag / kollekció)</h2>${excluded}
   <h2>Figyelmeztetések</h2>${warnings}
 </main>
 </body>

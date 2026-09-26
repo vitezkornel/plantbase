@@ -152,7 +152,18 @@ async function listExisting(client, file) {
 
 async function upsertAll(client, file, dryRun, outPath) {
   const input = JSON.parse(readFileSync(file, 'utf8'));
-  const warnings = [];
+  // Csomag/kollekció-szabály: a kizárt tételek nem kerülnek a táblába, de
+  // figyelmeztetésként megjelennek a riportban.
+  const excluded = (input.excluded ?? []).map((e) => ({
+    source: e.source,
+    handle: e.handle,
+    url: e.url ?? null,
+    name: e.name ?? e.handle,
+    reason: e.reason ?? 'csomag/kollekció',
+  }));
+  const warnings = excluded.map(
+    (e) => `${e.source}/${e.handle}: kizárva — ${e.reason}`,
+  );
   const inserted = [];
   const updated = [];
   const unchanged = [];
@@ -246,19 +257,21 @@ async function upsertAll(client, file, dryRun, outPath) {
       updated: updated.length,
       unchanged: unchanged.length,
       onSale: onSale.length,
+      excluded: excluded.length,
       warnings: warnings.length,
     },
     inserted,
     updated,
     unchanged,
     onSale,
+    excluded,
     warnings,
   };
   const out = resolve(outPath ?? 'tmp/product-sync/result.json');
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(result, null, 2));
   console.log(
-    `${dryRun ? '[DRY-RUN] ' : ''}új: ${inserted.length}, változott: ${updated.length}, változatlan: ${unchanged.length}, akciós: ${onSale.length}, figyelmeztetés: ${warnings.length} → ${out}`,
+    `${dryRun ? '[DRY-RUN] ' : ''}új: ${inserted.length}, változott: ${updated.length}, változatlan: ${unchanged.length}, akciós: ${onSale.length}, kizárt csomag: ${excluded.length}, figyelmeztetés: ${warnings.length} → ${out}`,
   );
 }
 

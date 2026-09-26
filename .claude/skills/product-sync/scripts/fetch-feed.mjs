@@ -32,6 +32,18 @@ export const SOURCES = {
 };
 
 const PAGE_LIMIT = 250;
+
+// Csomag/kollekció-heurisztika: a katalógusba csak egyedi növény kerül.
+// A cím/handle alapján jelöl (a "3+1" promóciós címkét szándékosan nem).
+const BUNDLE_PATTERN =
+  /\b(bundle|pack|kit|set|collection|assortment|trio|duo|orchard|kollekció|csomag|szett|válogatás)\b/i;
+
+function bundleHint(product) {
+  const match = `${product.title} ${product.handle.replace(/-/g, ' ')}`.match(
+    BUNDLE_PATTERN,
+  );
+  return match ? `csomag/kollekció („${match[1]}” a címben/handle-ben)` : null;
+}
 const MAX_PAGES = 40;
 
 function parseArgs(argv) {
@@ -118,6 +130,7 @@ function normalize(product, source, currency) {
     priceHuf: toHuf(isOnSale ? compareAt : current, currency),
     salePriceHuf: isOnSale ? toHuf(current, currency) : null,
     available: (product.variants ?? []).some((v) => v.available),
+    bundleHint: bundleHint(product),
   };
 }
 
