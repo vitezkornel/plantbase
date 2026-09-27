@@ -1,0 +1,96 @@
+# Convention audit on every PR: runs the `convention-audit` subagent
+# (.claude/agents/convention-audit.md) through anthropics/claude-code-action
+# on the PR's changed files, then posts its report as a PR comment.
+#
+# Requires the repository secret ANTHROPIC_API_KEY.
+# Security: `pull_request` (not `pull_request_target`) — PR code never runs
+# with secrets from a fork; fork PRs are skipped (no secret there anyway).
+# The job token is read-only for contents; it can only write PR comments.
+
+name: Claude convention review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  convention-audit:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # The PR diff, prepared deterministically for the subagent (which
+      # has no Bash): the changed-file list and the full diff vs. the base.
+      - name: Prepare PR diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p tmp
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" > tmp/pr-files.txt
+          git diff "$BASE_SHA...$HEAD_SHA" > tmp/pr-diff.patch
+          echo "Changed files:"; cat tmp/pr-files.txt
+
+      - name: Run convention-audit subagent
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The job's own read-only token: no Claude GitHub App / OIDC needed,
+          # since Claude does not comment itself (the next step does).
+          github_token: ${{ github.token }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Futtasd le a `convention-audit` subagentet (.claude/agents/convention-audit.md)
+            erre a PR-re. A PR ágát már kicsekkoltuk.
+
+            Hatókör: CSAK a PR által változtatott fájlok.
+            - A változott fájlok listája: tmp/pr-files.txt
+            - A teljes diff a base ághoz képest: tmp/pr-diff.patch
+            Add át ezeket a subagentnek: a konvenciókat (docs/konvenciok.md) csak a
+            változott fájlokon és a diffben érintett részeken mérje; a domain-modellt
+            (docs/ddd/) akkor vizsgálja, ha a diff érinti a sémát, a toolokat, a
+            promptokat vagy a docs/ddd/ fájlokat.
+
+            A subagent a saját utasításai szerint a riportot a tmp/convention-audit.md
+            fájlba írja. Te ne módosíts más fájlt, ne commitolj, és ne kommentelj a
+            PR-re — a riportot a workflow következő lépése teszi közzé.
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Task,Agent,Read,Glob,Grep,Write"
+
+      - name: Post report as PR comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "## 🔎 Convention audit (claude-code-action)"
+            echo
+            if [ -s tmp/convention-audit.md ]; then
+              cat tmp/convention-audit.md
+            else
+              echo "_A convention-audit nem készített riportot — lásd a workflow logját: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
+            fi
+            echo
+            echo "---"
+            echo "_Ismert korlát: finom, numerikus/logikai domain-invariánsok ellenőrzésében az LLM-alapú audit megbízhatatlan lehet — ezeket kézzel is érdemes ellenőrizni. Commit: ${{ github.event.pull_request.head.sha }}_"
+          } > tmp/pr-comment.md
+          # One comment per PR, updated on every push instead of piling up.
+          gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body-file tmp/pr-comment.md
