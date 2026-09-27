@@ -39,6 +39,8 @@ export interface AgentLoopInput {
   messages: ModelMessage[];
   /** Registered tools, keyed by name. Omit/empty = no tools. */
   tools?: ToolSet;
+  /** Step cap for this agent; defaults to MAX_ITERATIONS (the ask-agent's). */
+  maxIterations?: number;
 }
 
 /** One tool call made during the loop — for callers that want to log it (FR4). */
@@ -76,6 +78,7 @@ export async function runAgentLoop(
   input: AgentLoopInput,
 ): Promise<AgentLoopResult> {
   const { model, maxTokens, system, messages, tools } = input;
+  const maxIterations = input.maxIterations ?? MAX_ITERATIONS;
 
   const result = await generateText({
     model,
@@ -86,14 +89,14 @@ export async function runAgentLoop(
     // The unknown-tool condition stops the loop right after the offending
     // step instead of letting the SDK spend one more model round-trip
     // trying to let the model recover from our own wiring bug.
-    stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
+    stopWhen: [stepCountIs(maxIterations), hasUnknownToolRequest],
   });
 
   assertNoUnknownToolRequests(result.steps);
 
-  if (result.finishReason === 'tool-calls' && result.steps.length >= MAX_ITERATIONS) {
+  if (result.finishReason === 'tool-calls' && result.steps.length >= maxIterations) {
     throw new Error(
-      `Agent loop exceeded the maximum of ${MAX_ITERATIONS} iterations without reaching a final answer.`,
+      `Agent loop exceeded the maximum of ${maxIterations} iterations without reaching a final answer.`,
     );
   }
 
