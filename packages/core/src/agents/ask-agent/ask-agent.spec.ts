@@ -220,3 +220,16 @@ describe('askAgent', () => {
     await rm(result.logPath, { force: true });
   });
 });
+
+describe('askAgent toolset (read-only guarantee)', () => {
+  it('never offers the write-capable ingestProduct tool — only the four read-only tools', async () => {
+    const model = makeModel('ok');
+
+    const result = await askAgent('Milyen kategóriák vannak?', { model });
+
+    const offered = (model.doGenerateCalls[0].tools ?? []).map((t) => t.name).sort();
+    expect(offered).toEqual(['customerPreferences', 'listCategories', 'runSql', 'searchKnowledge']);
+
+    await rm(result.logPath, { force: true });
+  });
+});

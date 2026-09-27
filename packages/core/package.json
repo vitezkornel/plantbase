@@ -16,6 +16,11 @@
       "import": "./src/ingest/ingest-agent.ts",
       "default": "./src/ingest/ingest-agent.ts"
     },
+    "./admin": {
+      "types": "./src/agents/admin-agent/admin-agent.ts",
+      "import": "./src/agents/admin-agent/admin-agent.ts",
+      "default": "./src/agents/admin-agent/admin-agent.ts"
+    },
     "./package.json": "./package.json"
   },
   "dependencies": {
