@@ -222,6 +222,22 @@ describe('runAgentLoop', () => {
     ).rejects.toThrow(/max/i);
   });
 
+  it('honors a per-agent maxIterations override instead of the default cap', async () => {
+    const execute = vi.fn().mockResolvedValue({
+      ok: true,
+      data: { rows: [] },
+    } satisfies ToolOutcome);
+    const tools = { runSql: makeTool(execute) };
+    const model = makeModel(async () =>
+      step('tool-calls', [toolCallPart('runSql', { sql: 'SELECT 1' }, 'tool_x')]),
+    );
+
+    await expect(
+      runAgentLoop({ model, ...baseInput, tools, maxIterations: 8 }),
+    ).rejects.toThrow(/maximum of 8 iterations/);
+    expect(execute).toHaveBeenCalledTimes(8);
+  });
+
   it('dispatches a second, refined tool_use call in a later iteration before answering (2 sequential runSql round-trips)', async () => {
     const execute = vi
       .fn()

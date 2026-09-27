@@ -35,6 +35,7 @@ pnpm nx build cli                                    # lebuildeli az apps/cli/di
 node apps/cli/dist/main.js ask "<kérdés>"            # egyszeri lekérdezés
 node apps/cli/dist/main.js ask                       # interaktív (readline; "exit"-tel lépsz ki)
 node apps/cli/dist/main.js ask --show-prompt "<k>"   # a system promptot + a teljes üzenet-tömböt is kiírja
+pnpm cli ingest "<kérés>"                            # build + ingest agent: feedből frissíti a products táblát (ÍR a DB-be)
 ```
 
 ### Teszt / lint / típusellenőrzés
@@ -46,7 +47,7 @@ pnpm nx test core -- src/tools/list-categories/list-categories-tool.spec.ts  # e
 pnpm nx run-many -t lint,typecheck                                 # az egész workspace-re
 ```
 
-A `packages/core` `tools/run-sql` és `tools/list-categories` mappája, valamint a `packages/db` `readonly-role.spec.ts` fájlja **élő** integrációs teszteket is tartalmaz a `DATABASE_URL_READONLY` ellen — ezek sikeréhez a compose Postgres konténernek futnia kell, migrálva és seedelve (nincsenek mockolva).
+A `packages/core` `tools/run-sql` és `tools/list-categories` mappája, valamint a `packages/db` `readonly-role.spec.ts` fájlja **élő** integrációs teszteket is tartalmaz a `DATABASE_URL_READONLY` ellen (a `product-writer.spec.ts` pedig a read-write `DATABASE_URL` ellen, saját tesztforrással, utána takarítva) — ezek sikeréhez a compose Postgres konténernek futnia kell, migrálva és seedelve (nincsenek mockolva).
 
 ## Architektúra
 
@@ -61,7 +62,11 @@ Nx monorepo (pnpm workspace-ek), 3, egymástól függetlenül buildelhető/teszt
   - `tools/run-sql/` — a `runSql` tool: a modell saját maga generálta SQL, amit a `sql-guard.ts` valid (egy kulcsszó-alapú guard, ami csak egyetlen SELECT/WITH statementet enged — elutasítja a stacked statementeket és az adatmódosító CTE-bypasseket), mielőtt egyáltalán eljutna a DB-hez.
   - `tools/list-categories/` — a `listCategories` tool: egyetlen fix `SELECT DISTINCT category FROM products` lekérdezés, nincs modell-generálta SQL, így guard-ra sincs szükség.
   - Minden tool saját könyvtára tartalmazza mindazt, ami rá jellemző (séma, guard ha van, teszt); ami több toolnak is kell, az egy szinttel feljebb lakik, ahelyett hogy toolonként duplikálódna.
-- **`packages/db`** — a **read-write** `DATABASE_URL` kapcsolat gazdája: Prisma séma, migrációk és seed (`prisma.config.ts` — a Prisma 7 config-alapú seed-hookja, nem egy `package.json`-beli `"prisma"` kulcs; a futtatáshoz cwd = `packages/db` szükséges, pl. `pnpm --filter db exec prisma ...` formában). Az `sql/create-readonly-role.sql` hozza létre a külön, read-only Postgres role-t, amivel a `packages/core` közvetlenül kapcsolódik.
-- **`apps/cli`** — csak egy commander-alapú I/O-felszín (`ask` parancs, egyszeri vagy interaktív); nincs benne üzleti logika azon túl, hogy az stdin/argv-t bekötti az `askAgent`-be, és kiírja a nyers eredményét.
+  - `ingest/` — a külön **ingest agent** (`ingestProduct(request)`), ugyanazon a `runAgentLoop`-on (`maxIterations: 8`), saját prompttal és két saját toollal: `scrape-products/` (feed letöltése, tömör kivonat; nem ír) és `upsert-products/` (Zod-validálás, csomag-/akcióár-védőkorlát, majd írás a `packages/db` `upsertProducts`-án át). Csak a külön `core/ingest` alúton érhető el; a sima `core` belépési pont továbbra is csak az `askAgent`-et exportálja.
+- **`packages/db`** — a **read-write** `DATABASE_URL` kapcsolat gazdája: Prisma séma, migrációk és seed (`prisma.config.ts` — a Prisma 7 config-alapú seed-hookja, nem egy `package.json`-beli `"prisma"` kulcs; a futtatáshoz cwd = `packages/db` szükséges, pl. `pnpm --filter db exec prisma ...` formában), valamint a `lib/product-writer.ts` (`upsertProducts`) — az ingest agent egyetlen írási útja a `products` táblába, `(source, source_handle)` kulccsal. Az `sql/create-readonly-role.sql` hozza létre a külön, read-only Postgres role-t, amivel a `packages/core` read-only toolja közvetlenül kapcsolódik.
+- **`apps/cli`** — csak egy commander-alapú I/O-felszín: `ask` (egyszeri vagy interaktív, az `askAgent`-be kötve) és `ingest "<kérés>"` (az `ingestProduct`-ba kötve, futás végén lezárja a read-write kapcsolatot); nincs benne üzleti logika azon túl, hogy az stdin/argv-t bekötti az agentekbe, és kiírja a nyers eredményüket.
 
-**Két DB-kapcsolat, két jog** a fő biztonsági alapelv: a `DATABASE_URL` (read-write, Prisma, csak a `packages/db` használja) vs. a `DATABASE_URL_READONLY` (csak SELECT-et engedő Postgres role, nyers `pg` kliens, csak a `packages/core` toolja használja — soha nem Prismán keresztül). Az agentnek nincs olyan kódútja, ami írni tudna az adatbázisba — ezt két, egymástól független rétegen kényszerítjük ki: az alkalmazás-szintű SQL guard (`sql-guard.ts`) és a Postgres role saját jogosultságai.
+**Két DB-kapcsolat, két jog** a fő biztonsági alapelv: a `DATABASE_URL` (read-write, Prisma, csak a `packages/db` használja) vs. a `DATABASE_URL_READONLY` (csak SELECT-et engedő Postgres role, nyers `pg` kliens, csak a `packages/core` read-only toolja használja — soha nem Prismán keresztül).
+
+- **Az ask-agent read-only marad:** a toolkészletében (`runSql`, `listCategories`, `searchKnowledge`, `customerPreferences`) nincs olyan kódút, ami írni tudna az adatbázisba — ezt két, egymástól független rétegen kényszerítjük ki: az alkalmazás-szintű SQL guard (`sql-guard.ts`) és a Postgres role saját jogosultságai.
+- **Az ingest agent írásra jogosult, elkülönített kódúton:** csak az `upsertProducts` toolja ír, kizárólag a `packages/db` read-write Prisma kapcsolatán át (a core nem épít saját read-write kapcsolatot), és csak a `core/ingest` alúton érhető el. Az ask-agent sosem regisztrálja az ingest toolokat, és a `plantbase_readonly` role jogai sem változtak.
