@@ -18,11 +18,18 @@ Fejlesztői (L1) eszköz: a DDD-dokumentáció (`docs/ddd/glossary.md`, `docs/dd
 
 ### 1. Nézd meg a git history változásait
 
-- Határozd meg a kiindulópontot: a `docs/ddd/` utolsó módosító commitja
-  `git log -1 --format=%H -- docs/ddd/`
-  Ha még nincs ilyen (a könyvtár nem létezik), a teljes history számít.
-- Listázd az azóta történt, domain-releváns változásokat:
-  `git log --oneline <base>..HEAD -- packages/db/prisma/ packages/core/src/tools/ packages/core/src/agents/ docs/system-prompt.md docs/brs-plantbase.md`
+- Határozd meg a kiindulópontot (`<base>`) ebben a sorrendben:
+  1. **Jelölőfájl** — `docs/ddd/.last-audit` `commit:` sora: az előző audit által már megvizsgált utolsó commit. Így csak az kerül sorra, amit még egyetlen audit sem nézett meg — akkor is, ha az előző futás nem talált eltérést.
+     Csak akkor használható, ha a commit létezik és őse a mostani HEAD-nek:
+     `git merge-base --is-ancestor <commit> HEAD` (0-s kilépési kód = rendben).
+     Ha nem az (másik ág, rebase, squash), mondd ki a riportban, és lépj a 2. pontra.
+     Ha `<commit>` = HEAD, nincs új commit: csak a jelölőben nyitottként tárolt javaslatokat nézd újra (lásd lent), a history-részt hagyd ki.
+  2. **Tartalék**, ha nincs (érvényes) jelölő: a `docs/ddd/` utolsó módosító commitja
+     `git log -1 --format=%H -- docs/ddd/`
+     Ha még nincs ilyen (a könyvtár nem létezik), a teljes history számít.
+- A jelölőfájl `open:` listájában az előző futás(ok) üzleti döntésre váró javaslatai vannak — ezeket mindig vizsgáld újra (a kódban/doksiban azóta megoldódtak-e), függetlenül a tartománytól.
+- Listázd a `<base>` óta történt, domain-releváns változásokat:
+  `git log --oneline <base>..HEAD -- packages/db/prisma/ packages/core/src/tools/ packages/core/src/agents/ packages/core/src/ingest/ docs/system-prompt.md docs/brs-plantbase.md`
   és a konkrét diffet: `git diff <base>..HEAD -- <ugyanezek>`
 - Domain-forrásnak számít elsősorban:
   - `packages/db/prisma/schema.prisma` (a `Product` modell mezői és kommentben rögzített értékkészletei), migrációk, seed
@@ -51,3 +58,20 @@ Fejlesztői (L1) eszköz: a DDD-dokumentáció (`docs/ddd/glossary.md`, `docs/dd
   - javaslatok, döntésre várva (eltérés, forrás a kódban, javasolt szöveg)
   - ha minden naprakész, mondd ki egyértelműen.
 - Ne commitolj automatikusan — a felhasználó dönti el, mikor és hogyan kerül be a változás.
+
+### 4. Jelölőfájl frissítése
+
+A futás végén — akkor is, ha nem találtál eltérést — írd felül a `docs/ddd/.last-audit` fájlt:
+
+```
+# ddd-audit jelölő — a következő futás innen indul. Kézzel ne szerkeszd.
+commit: <a vizsgált tartomány vége: `git rev-parse HEAD`>
+date: <mai dátum, ÉÉÉÉ-HH-NN>
+open:
+  - <még döntésre váró javaslat, egy sorban, forrással (fájl:sor)>
+```
+
+- `commit`: mindig a HEAD, amit ebben a futásban megvizsgáltál. A commitolatlan munkakönyvtár-változások nem számítanak bele — ha voltak domain-releváns commitolatlan változások, jelezd a riportban, hogy commit után újra kell futtatni.
+- `open`: csak a még nyitott, üzleti döntésre váró javaslatok (a már eldöntött vagy megoldódott tételeket vedd ki). Ha nincs ilyen: `open: []`.
+- A jelölő a doksi része: a felhasználó a `docs/ddd/` változásaival együtt commitolja.
+- Ha nincs git- és írási hozzáférésed (pl. a read-only `convention-audit` agent tölti be ezt a skillt), a jelölőt ne olvasd kiindulópontként és ne írd.

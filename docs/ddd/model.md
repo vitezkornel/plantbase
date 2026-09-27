@@ -42,11 +42,12 @@ Növénygondozási cikk egy szakasza, forrás-hivatkozással (`title`, `source`)
 - **Tényleges ár:** `COALESCE(sale_price, price)`; minden költségkeret-számítás ezzel történik.
 - **Raktáron:** `stock > 0`.
 - **Készlet feedes terméknél:** ha a termék feedből jön (`source` nem `null`), a `stock` **csak elérhetőséget** jelent — `1` = a webshopban elérhető, `0` = nem elérhető —, nem valós darabszámot (a feedek nem adnak darabszámot). A „raktáron” szabály így rájuk is működik, de a `stock` értékéből mennyiség nem olvasható ki.
-- **Feed-azonosítás (upsert-kulcs):** a `(source, source_handle)` pár egyedi; ez alapján frissíti a `product-sync` a már meglévő feedes termékeket. A seed-termékeknél mindkettő `null`, ezért nem ütköznek egymással (Postgres-ben a `NULL`-ok nem számítanak egyezésnek).
+- **Feed-azonosítás (upsert-kulcs):** a `(source, source_handle)` pár egyedi; ez alapján frissíti a már meglévő feedes termékeket a `product-sync` skill és az ingest agent (`packages/db` `upsertProducts`). A seed-termékeknél mindkettő `null`, ezért nem ütköznek egymással (Postgres-ben a `NULL`-ok nem számítanak egyezésnek).
 - **Fényigény-egyezés:** ügyfélpreferencia alapján alapértelmezésben pontos egyezés; szomszédos fényszintek (pl. `erős` ↔ `direkt nap`) nem számítanak egyezésnek.
-- **Értékkészletek:** a kategorikus mezők (`category`, `location`, `light`, `watering`, `difficulty`) szabad szöveges oszlopok; az értékkészletet csak konvenció rögzíti (séma-kommentek, a seed TypeScript-típusa, a system prompt) — nincs rájuk DB-szintű enum vagy CHECK constraint (az egyetlen CHECK az akciós árra vonatkozik, lásd fent).
+- **Értékkészletek:** a kategorikus mezők (`category`, `location`, `light`, `watering`, `difficulty`) szabad szöveges oszlopok; az értékkészletet konvenció rögzíti (séma-kommentek, a seed TypeScript-típusa, a system prompt), a feedes írási úton pedig az ingest agent Zod-validációja (`upsert-products-schema.ts`) — nincs rájuk DB-szintű enum vagy CHECK constraint (az egyetlen CHECK az akciós árra vonatkozik, lásd fent).
 - **Kitöltöttség:** a DB-ben minden `products` oszlop nullable; a seed minden mezőt kitölt, kivéve a `sale_price`-t.
-- **Csak olvasás:** a domain-modellt az agent kizárólag olvassa, soha nem módosítja.
+- **Egy termék = egy egyedi növény:** csomag / kollekció (duo, trio, pack, bundle, orchard stb.) nem kerül a katalógusba, mert egy sor ára, mérete, fényigénye egy növényre vonatkozik. A feedes írási út ezt kikényszeríti (`ingest/bundle-pattern.ts`: az `upsertProducts` a csomagnak látszó sort visszautasítja).
+- **Olvasás és írás:** az ask-agent a domain-modellt kizárólag olvassa. Írni csak az ingest agent tud (és az admin agent rajta keresztül), elkülönített kódúton, a `products` táblába.
 
 ## Még nem modellezett fogalmak
 
