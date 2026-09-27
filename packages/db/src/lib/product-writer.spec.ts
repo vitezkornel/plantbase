@@ -85,4 +85,18 @@ describe('upsertProducts (live DB)', () => {
     // an existing description is kept
     expect(rows[0].description).toBe('Első leírás.');
   });
+
+  it('should be rejected by the DB when sale_price is not lower than price (CHECK products_sale_price_lt_price)', async () => {
+    await expect(
+      upsertProducts([
+        { ...base, sourceHandle: 'test-bad-sale', price: 3000, salePrice: 3000 },
+      ]),
+    ).rejects.toThrow(/products_sale_price_lt_price/);
+
+    const { rows } = await admin.query(
+      'SELECT 1 FROM products WHERE source = $1 AND source_handle = $2',
+      [SOURCE, 'test-bad-sale'],
+    );
+    expect(rows).toHaveLength(0);
+  });
 });

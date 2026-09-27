@@ -22,6 +22,8 @@ model Product {
   category        String? // szobanövény / kerti / pozsgás / kaktusz / fűszer / fa-cserje / lógó / virágzó
   location        String? // beltéri / kültéri / mindkettő
   price           Decimal? // ár (HUF)
+  // CHECK products_sale_price_lt_price (migrations/20260927120000_…): sale_price
+  // csak null vagy price-nál kisebb lehet — Prisma nem tudja kifejezni, csak a migrációban él.
   salePrice       Decimal? @map("sale_price") // akciós ár (ha van akció), különben null
   stock           Int? // raktárkészlet (db)
   light           String? // árnyék / alacsony / közepes / erős / direkt nap
