@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { registerAdminCommand } from './commands/admin-command.js';
 import { registerAskCommand } from './commands/ask-command.js';
 import { registerIngestCommand } from './commands/ingest-command.js';
 
@@ -11,6 +12,7 @@ program.name('plantbase').description('Plantbase CLI').version(CLI_VERSION);
 
 registerAskCommand(program);
 registerIngestCommand(program);
+registerAdminCommand(program);
 
 // The `ask` command's action calls the (async) agent, so commander must
 // await it — `parseAsync` (not `parse`) waits for action handlers that

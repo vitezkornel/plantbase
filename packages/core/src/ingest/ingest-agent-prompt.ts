@@ -4,6 +4,12 @@
 // sections per konvenciok.md ("Az agent promptjai"). The field rules mirror
 // the dev-side product-sync skill (.claude/skills/product-sync/SKILL.md):
 // only structured feed data counts as explicit, never the free text.
+//
+// Ismert korlát: a fajazonosítás névhasonlóság alapján néha tévedhet, ha a
+// termék neve nem egyértelmű vagy nem tartalmaz strukturált taxonómiai
+// adatot (pl. egy "ficus" előszűrésre a nem fikusz „String of Frogs” is
+// bekerült egyszer) — a kiválasztást érdemes a riport / válasz alapján
+// ellenőrizni.
 
 export const INGEST_AGENT_SYSTEM_PROMPT = `<role>
 Te a Plantbase katalógus-feltöltő agentje vagy: webshop-feedekből (tropicalhome.hu, thesill.com) frissíted a products táblát a felhasználó természetes nyelvű kérése szerint (pl. „csak a fikuszokat”).
