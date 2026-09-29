@@ -1,6 +1,12 @@
-# Convention audit on every PR: runs the `convention-audit` subagent
-# (.claude/agents/convention-audit.md) through anthropics/claude-code-action
-# on the PR's changed files, then posts its report as a PR comment.
+# Review on every PR, posted as one PR comment with two parts:
+#   1. DDD audit (report-only): the `ddd-audit` skill on the PR diff, split
+#      into "a /ddd átírná" (descriptive) vs. "üzleti döntést igényel".
+#      Nothing is written to docs/ddd/ and the .last-audit marker is not
+#      touched — the local /ddd stays the one that fixes the docs.
+#   2. Convention audit: the `convention-audit` subagent
+#      (.claude/agents/convention-audit.md), code conventions only (the
+#      domain part is covered by 1., so it is not checked twice).
+# Both run through anthropics/claude-code-action on the PR's changed files.
 #
 # Requires the repository secret ANTHROPIC_API_KEY.
 # Security: `pull_request` (not `pull_request_target`) — PR code never runs
@@ -23,7 +29,7 @@ jobs:
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: write
@@ -35,62 +41,124 @@ jobs:
 
       # The PR diff, prepared deterministically for the subagent (which
       # has no Bash): the changed-file list and the full diff vs. the base.
+      # Also decides — without a model call — whether the PR touches any
+      # domain source the ddd-audit skill watches.
       - name: Prepare PR diff
+        id: diff
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           mkdir -p tmp
-          git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" > tmp/pr-files.txt
+          git diff --name-only --diff-filter=ACMRD "$BASE_SHA...$HEAD_SHA" > tmp/pr-files.txt
           git diff "$BASE_SHA...$HEAD_SHA" > tmp/pr-diff.patch
           echo "Changed files:"; cat tmp/pr-files.txt
+          # Same paths as the ddd-audit skill's step 1, plus docs/ddd/ itself.
+          if grep -E '^(packages/db/prisma/|packages/core/src/(tools|agents|ingest)/|docs/system-prompt\.md$|docs/brs-plantbase\.md$|docs/ddd/)' tmp/pr-files.txt > tmp/pr-domain-files.txt; then
+            echo "domain=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "domain=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Domain-relevant files:"; cat tmp/pr-domain-files.txt || true
 
-      - name: Run convention-audit subagent
+      - name: Run DDD + convention audit
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # The job's own read-only token: no Claude GitHub App / OIDC needed,
-          # since Claude does not comment itself (the next step does).
+          # since Claude does not comment itself (the last step does).
           github_token: ${{ github.token }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE: ${{ github.event.pull_request.base.sha }}
+            HEAD: ${{ github.event.pull_request.head.sha }}
+            DOMAIN_TOUCHED: ${{ steps.diff.outputs.domain }}
 
-            Futtasd le a `convention-audit` subagentet (.claude/agents/convention-audit.md)
-            erre a PR-re. A PR ágát már kicsekkoltuk.
-
-            Hatókör: CSAK a PR által változtatott fájlok.
+            Két riportot készítesz erre a PR-re. A PR ágát már kicsekkoltuk.
             - A változott fájlok listája: tmp/pr-files.txt
-            - A teljes diff a base ághoz képest: tmp/pr-diff.patch
-            Add át ezeket a subagentnek: a konvenciókat (docs/konvenciok.md) csak a
-            változott fájlokon és a diffben érintett részeken mérje; a domain-modellt
-            (docs/ddd/) akkor vizsgálja, ha a diff érinti a sémát, a toolokat, a
-            promptokat vagy a docs/ddd/ fájlokat.
+            - A domain-releváns változott fájlok: tmp/pr-domain-files.txt
+            - A teljes diff a base-hez képest: tmp/pr-diff.patch
 
-            A subagent a saját utasításai szerint a riportot a tmp/convention-audit.md
-            fájlba írja. Te ne módosíts más fájlt, ne commitolj, és ne kommentelj a
-            PR-re — a riportot a workflow következő lépése teszi közzé.
+            SZIGORÚ: csak a két riportfájlt írhatod (tmp/ddd-audit.md, és a subagent a
+            tmp/convention-audit.md-t). Semmi mást ne módosíts — a docs/ddd/ fájlokat és
+            a docs/ddd/.last-audit jelölőt se —, ne commitolj, és ne kommentelj a PR-re:
+            a riportokat a workflow következő lépése teszi közzé.
+
+            ## 1. DDD-audit — csak riport (tmp/ddd-audit.md)
+
+            Ha DOMAIN_TOUCHED = false: a tmp/ddd-audit.md tartalma pontosan ez legyen:
+            "A PR nem érint domain-releváns fájlt — DDD-audit nem szükséges."
+            és lépj a 2. részre.
+
+            Ha DOMAIN_TOUCHED = true: töltsd be a `ddd-audit` skillt (Skill tool; vagy
+            olvasd el a .claude/skills/ddd-audit/SKILL.md-t), és kövesd az 1–3. lépését
+            az alábbi eltérésekkel:
+            - Kiindulópont: NEM a jelölőfájl. A vizsgált tartomány kizárólag a PR:
+              `git log --oneline BASE...HEAD` és `git diff BASE...HEAD` (a fenti
+              BASE/HEAD értékekkel) a skill figyelt útvonalain.
+            - A 3. lépés „frissítsd” ágát NEM hajtod végre, és a 4. lépést (jelölő)
+              sem: minden eltérés csak javaslat.
+            - Minden eltérést a skill szabálya szerint sorolj be: leíró (a helyi /ddd
+              magától átírná) vagy üzleti döntést érintő. Ha kétséges: üzleti döntés.
+
+            A tmp/ddd-audit.md PONTOSAN ebben a szerkezetben készüljön (magyarul):
+
+            Vizsgált tartomány: `<BASE rövid>...<HEAD rövid>` · domain-releváns fájlok: <lista>
+
+            ### ✏️ Automatikusan javítható — a helyi `/ddd` átírná
+
+            | # | Eltérés | Forrás a kódban (fájl:sor) | Doksi helye (fájl, szakasz) | Javasolt új szöveg (szó szerint) |
+            |---|---|---|---|---|
+
+            ### ⚖️ Üzleti döntést igényel — a `/ddd` sem írná át
+
+            | # | Eltérés | Forrás (fájl:sor) | Lehetséges döntések | Javaslat és indok |
+            |---|---|---|---|---|
+
+            Ha egy csoportban nincs tétel, a táblázat helyére ezt írd: "Nincs."
+            Csak olyat állíts, amit fájl:sor hivatkozással alá tudsz támasztani.
+
+            ## 2. Convention audit (subagent → tmp/convention-audit.md)
+
+            Futtasd le a `convention-audit` subagentet (.claude/agents/convention-audit.md).
+            Add át neki: CSAK a kódkonvenciókat (docs/konvenciok.md) mérje, CSAK a
+            tmp/pr-files.txt fájljain és a tmp/pr-diff.patch érintett részein. A
+            domain-modell (docs/ddd/) mércét most hagyja ki teljesen — azt az 1. rész
+            fedi le —, a riportjában ezt egy mondatban jelezze.
           claude_args: |
-            --max-turns 40
-            --allowedTools "Task,Agent,Read,Glob,Grep,Write"
+            --max-turns 60
+            --allowedTools "Skill,Task,Agent,Read,Glob,Grep,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
 
       - name: Post report as PR comment
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           {
-            echo "## 🔎 Convention audit (claude-code-action)"
+            echo "## 🧭 DDD-audit (csak javaslat — a \`docs/ddd/\`-t nem módosítja)"
+            echo
+            if [ -s tmp/ddd-audit.md ]; then
+              cat tmp/ddd-audit.md
+            else
+              echo "_A DDD-audit nem készített riportot — lásd a workflow logját: ${RUN_URL}_"
+            fi
+            echo
+            echo "_Az ✏️ csoportot merge után a helyi \`/ddd\` átírja; a ⚖️ csoport döntést igényel._"
+            echo
+            echo "## 🔎 Convention audit"
             echo
             if [ -s tmp/convention-audit.md ]; then
               cat tmp/convention-audit.md
             else
-              echo "_A convention-audit nem készített riportot — lásd a workflow logját: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
+              echo "_A convention-audit nem készített riportot — lásd a workflow logját: ${RUN_URL}_"
             fi
             echo
             echo "---"
-            echo "_Ismert korlát: finom, numerikus/logikai domain-invariánsok ellenőrzésében az LLM-alapú audit megbízhatatlan lehet — ezeket kézzel is érdemes ellenőrizni. Commit: ${{ github.event.pull_request.head.sha }}_"
+            echo "_Ismert korlát: finom, numerikus/logikai domain-invariánsok ellenőrzésében az LLM-alapú audit megbízhatatlan lehet — ezeket kézzel is érdemes ellenőrizni. Commit: ${HEAD_SHA}_"
           } > tmp/pr-comment.md
           # One comment per PR, updated on every push instead of piling up.
           gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body-file tmp/pr-comment.md
