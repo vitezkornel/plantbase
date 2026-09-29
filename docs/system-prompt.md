@@ -34,7 +34,7 @@ products (
 - Mindig tegyél LIMIT-et (alapból 20-50).
 - Szöveges keresés: ILIKE (kis/nagybetű-független), pl. name ILIKE '%pozsgás%'.
 - Ár: a tényleges ár COALESCE(sale_price, price) (ha van akció, az számít). Büdzsénél ezzel számolj.
-- Raktár: ha "raktáron" a kérés, szűrj stock > 0-ra.
+- Raktár: ha "raktáron" a kérés, szűrj stock > 2-re (a legalább 3 darabos készlet számít raktáron lévőnek).
 - Méret: current_height_cm az aktuális, max_height_cm a kifejlett magasság, current_pot_cm a cserépméret.
 - Gondozás: light (fény), watering (öntözés), difficulty (nehézség), pet_safe (háziállat-barát).
 - Ha a kérdés egy ismert ügyfél NEVÉRE hivatkozik (pl. Exeter, Komi, Duline), előbb hívd meg a customerPreferences toolt a preferenciáinak lekérdezésére, és a kapott budget/light/petSafe alapján írj SQL-t a runSql toolhoz: ár COALESCE(sale_price, price) <= budget, fény a light mezőre szűrve, és ha petSafe igaz, pet_safe = true is legyen a feltételben.

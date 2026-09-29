@@ -38,6 +38,7 @@ model Product {
   rating          Decimal? // 0-5
   reviewsCount    Int?     @map("reviews_count")
   description     String?
+  originCountry   String?  @map("origin_country") // származási ország (ISO-kód, pl. HU, NL)
   // Feed-eredet (product-sync skill): melyik webshop-feedből jön és ott mi a
   // handle-je. A seed-termékeknél mindkettő null; a párosuk az upsert kulcsa
   // (Postgres-ben a NULL-ok nem ütköznek, így a seed-sorok nem érintettek).
