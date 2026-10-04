@@ -66,6 +66,10 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
     try {
       json = JSON.parse(s.textContent);
     } catch {
+      // Szándékos: egy hibás JSON-LD blokk (pl. más app törött jelölése) nem
+      // állítja meg a kinyerést, a többi blokkban még lehet aggregateRating.
+      // Ha egyikben sincs, a mezők null-ok maradnak, és a „minden mező null”
+      // szabály (Hibakezelés) jelzi a terméket.
       continue;
     }
     const agg = findAgg(json);
