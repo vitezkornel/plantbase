@@ -15,6 +15,7 @@ vitest.config.*.timestamp*
 *.tsbuildinfo
 *.log
 .superpowers/
+.playwright-mcp/
 
 # Prisma generated client (packages/db) — regenerated via `prisma generate`/`migrate dev`
 packages/db/generated/
