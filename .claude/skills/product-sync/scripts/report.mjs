@@ -27,7 +27,19 @@ const FIELD_LABELS = {
   pet_safe: 'Háziállat-barát',
   kid_safe: 'Gyerekbiztos',
   air_purifying: 'Légtisztító',
+  rating: 'Értékelés',
+  reviews_count: 'Értékelésszám',
   description: 'Leírás',
+};
+
+// Adatlap-mélyítés (references/page-enrich.md): a kért mezők saját oszlopot
+// kapnak, a pageEnrich.requested sorrendjében.
+const ENRICH_COLUMNS = {
+  rating: ['Értékelés', (p) => (p.rating === null ? '–' : `${p.rating} / 5`)],
+  reviewsCount: ['Értékelésszám', (p) => p.reviewsCount],
+  watering: ['Öntözés', (p) => p.watering],
+  petSafe: ['Háziállat-barát', (p) => fmt('pet_safe', p.petSafe)],
+  kidSafe: ['Gyerekbiztos', (p) => fmt('kid_safe', p.kidSafe)],
 };
 
 const esc = (v) =>
@@ -51,8 +63,10 @@ const fmt = (field, v) => {
     return String(v).length > 80 ? `${String(v).slice(0, 80)}…` : v;
   return v;
 };
+// Csak https: link — egy javascript:/data: URL a feedből vagy a pageEnrich
+// blokkból nem lehet kattintható a riportban.
 const nameCell = (p) =>
-  p.url
+  /^https:\/\//i.test(p.url ?? '')
     ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`
     : esc(p.name);
 const discount = (p) => Math.round((1 - p.salePrice / p.price) * 100);
@@ -100,6 +114,35 @@ function render(r) {
         `<tr><td>${nameCell(p)}</td><td>${esc(p.source)}</td><td>${esc(p.reason)}</td></tr>`,
     ),
   );
+  const pe = r.pageEnrich;
+  const enrichCols = pe
+    ? (pe.requested ?? Object.keys(ENRICH_COLUMNS)).filter((k) =>
+        Object.hasOwn(ENRICH_COLUMNS, k),
+      )
+    : [];
+  const countEnrichByStatus = (s) =>
+    (pe?.items ?? []).filter((p) => p.status === s).length;
+  const enriched = pe
+    ? `<h2>Adatlapról mélyített mezők</h2>
+  <p class="meta">Playwright MCP, legfeljebb ${esc(pe.limit ?? 10)} termék/futás · ok: ${countEnrichByStatus('ok')} · hiba: ${countEnrichByStatus('hiba')} · kihagyva: ${countEnrichByStatus('kihagyva')}</p>
+  ${table(
+    [
+      'Termék',
+      'Forrás',
+      ...enrichCols.map((k) => ENRICH_COLUMNS[k][0]),
+      'Állapot',
+      'Megjegyzés',
+    ],
+    (pe.items ?? []).map(
+      (p) =>
+        `<tr class="enrich-${esc(p.status)}"><td>${nameCell(p)}</td><td>${esc(p.source)}</td>${enrichCols
+          .map((k) => `<td>${esc(ENRICH_COLUMNS[k][1](p))}</td>`)
+          .join(
+            '',
+          )}<td><span class="status">${esc(p.status)}</span></td><td>${esc(p.note)}</td></tr>`,
+    ),
+  )}`
+    : '';
   const warnings = r.warnings.length
     ? `<ul class="warnings">${r.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>`
     : '<p class="empty">Nincs figyelmeztetés.</p>';
@@ -139,6 +182,8 @@ function render(r) {
   .changes { margin:0; padding-left:18px; } .field { color:var(--muted); }
   .badge { background:var(--sale); color:#fff; border-radius:6px; padding:1px 7px; font-weight:600; font-size:.85rem; }
   .empty { color:var(--muted); font-style:italic; }
+  .status { font-weight:600; font-size:.85rem; }
+  .enrich-hiba .status { color:var(--sale); } .enrich-kihagyva .status { color:var(--muted); }
   .warnings { background:var(--warn-bg); color:var(--warn); border-radius:10px; padding:12px 12px 12px 32px; margin:0; }
 </style>
 </head>
@@ -159,6 +204,7 @@ function render(r) {
   <h2>Változott termékek</h2>${updated}
   <h2>Akciós termékek</h2>${onSale}
   <h2>Kizárt tételek (csomag / kollekció)</h2>${excluded}
+  ${enriched}
   <h2>Figyelmeztetések</h2>${warnings}
 </main>
 </body>

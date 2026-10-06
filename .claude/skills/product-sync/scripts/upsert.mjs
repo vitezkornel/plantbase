@@ -61,6 +61,9 @@ const FILL_ONLY = [
   'pet_safe',
   'kid_safe',
   'air_purifying',
+  // Csak adatlap-mélyítéskor kap értéket (references/page-enrich.md).
+  'rating',
+  'reviews_count',
 ];
 const COLUMNS = [...FEED_OWNED, ...FILL_ONLY, 'description'];
 
@@ -95,6 +98,8 @@ function toRow(item, warnings) {
     pet_safe: item.petSafe ?? null,
     kid_safe: item.kidSafe ?? null,
     air_purifying: item.airPurifying ?? null,
+    rating: item.rating ?? null,
+    reviews_count: item.reviewsCount ?? null,
     description: item.description ?? null,
   };
   for (const [field, allowed] of Object.entries(ALLOWED)) {
@@ -102,6 +107,19 @@ function toRow(item, warnings) {
       warnings.push(`${where}: érvénytelen ${field} "${row[field]}" → null`);
       row[field] = null;
     }
+  }
+  if (row.rating !== null && !(row.rating >= 0 && row.rating <= 5)) {
+    warnings.push(`${where}: érvénytelen rating "${row.rating}" → null`);
+    row.rating = null;
+  }
+  if (
+    row.reviews_count !== null &&
+    !(Number.isInteger(row.reviews_count) && row.reviews_count >= 0)
+  ) {
+    warnings.push(
+      `${where}: érvénytelen reviewsCount "${row.reviews_count}" → null`,
+    );
+    row.reviews_count = null;
   }
   // Domain-szabály (docs/ddd/model.md): akciós az, aminek sale_price < price.
   if (
@@ -126,6 +144,8 @@ const NUMERIC = new Set([
   'current_height_cm',
   'max_height_cm',
   'current_pot_cm',
+  'rating',
+  'reviews_count',
 ]);
 const normCol = (c, v) =>
   v === null || v === undefined ? null : NUMERIC.has(c) ? Number(v) : v;
@@ -265,6 +285,8 @@ async function upsertAll(client, file, dryRun, outPath) {
     unchanged,
     onSale,
     excluded,
+    // Adatlap-mélyítés (references/page-enrich.md) — változatlanul a riportnak.
+    pageEnrich: input.pageEnrich ?? null,
     warnings,
   };
   const out = resolve(outPath ?? 'tmp/product-sync/result.json');
