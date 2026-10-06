@@ -2,6 +2,8 @@
 
 > Kurzus-melléklet. **Projekt-független** coding conventions, bármely TypeScript projektre. (A plantbase-specifikus döntések: `architektura.md`; az agent SQL-szabályai: `system-prompt.md`.) Ezt is 1:1 átadjuk a Claude Code-nak.
 
+> **Hatókör:** a fejlesztői szkriptekre és skillekre (`.claude/`, pl. `.claude/skills/*/scripts/*.mjs`) a Naming, a Hibakezelés, a Biztonság és a fájlméret-szabály elvei vonatkoznak (a külső adatot itt is validáld, de kézi ellenőrzéssel is lehet, nem kell hozzá Zod). A TypeScript-, a Tesztelés-, a többi Fájlszervezés- és a Naplózás-szabály a termékkódra (`packages/`, `apps/`) szól; egy CLI-szkriptnél a `console.log` maga a felület.
+
 ## Naming
 
 - `camelCase` változó/függvény, `PascalCase` típus/osztály/komponens, `UPPER_SNAKE` konstans.
