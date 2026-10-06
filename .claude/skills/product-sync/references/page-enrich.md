@@ -28,7 +28,7 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
       .replace(/\.[\w-]+(?:\s*,\s*\.[\w-]+)*\s*\{[^}]*\}/g, ' ') // inline SVG <style> szemét
       .replace(/\s+/g, ' ')
       .trim();
-  const between = (text, start, ends) => {
+  const extractBetween = (text, start, ends) => {
     const i = text.indexOf(start);
     if (i < 0) return null;
     const rest = text.slice(i + start.length);
@@ -48,6 +48,7 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
     watering: null,
     pet: null,
     kid: null,
+    skippedJsonLd: 0,
   };
   const findAgg = (o) => {
     if (!o || typeof o !== 'object') return null;
@@ -68,8 +69,8 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
     } catch {
       // Szándékos: egy hibás JSON-LD blokk (pl. más app törött jelölése) nem
       // állítja meg a kinyerést, a többi blokkban még lehet aggregateRating.
-      // Ha egyikben sincs, a mezők null-ok maradnak, és a „minden mező null”
-      // szabály (Hibakezelés) jelzi a terméket.
+      // Nem némán: a számláló a tétel note-jába kerül (Hibakezelés).
+      out.skippedJsonLd += 1;
       continue;
     }
     const agg = findAgg(json);
@@ -84,17 +85,17 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
     // A „Care Guide” fül rejtett panel → textContent, nem innerText; a
     // legszűkebb elem, ami a gondozási címkéket tartalmazza (pet-mező nélküli
     // oldalon az öntözési blokk egymagában).
-    const narrowest = (els) =>
+    const pickNarrowest = (els) =>
       els.sort((a, b) => a.textContent.length - b.textContent.length)[0];
     const withWatering = [...document.querySelectorAll('div, section')].filter(
       (e) => e.textContent.includes('Watering Requirements'),
     );
     const box =
-      narrowest(
+      pickNarrowest(
         withWatering.filter((e) =>
           e.textContent.includes('Pet-Friendly Plant?'),
         ),
-      ) ?? narrowest(withWatering);
+      ) ?? pickNarrowest(withWatering);
     const t = clean(box?.textContent);
     const ends = [
       'Sunlight Requirements',
@@ -103,15 +104,15 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
       'Read our full care guide',
       'FAQs',
     ];
-    out.watering = between(t, 'Watering Requirements', ends);
-    out.pet = between(t, 'Pet-Friendly Plant?', ends);
+    out.watering = extractBetween(t, 'Watering Requirements', ends);
+    out.pet = extractBetween(t, 'Pet-Friendly Plant?', ends);
   } else {
     // tropicalhome: emojival jelölt gondozási sorok a termékleírásban. A
     // jelölés termékenként eltér (öntözés: 💧 vagy 🌢; a ☀/☠ variációs
     // jellel vagy anélkül), ezért a jelek alakja nélkül (U+FE0F) keresünk.
     const t = clean(
       (document.querySelector('main') ?? document.body).textContent,
-    ).replace(/️/g, '');
+    ).replace(/\uFE0F/g, '');
     const ends = [
       '☀',
       '🌱',
@@ -124,10 +125,10 @@ A SKILL.md **3. lépése után** (kész `enriched.json`), **a 4. lépés (upsert
       'Size/Méret',
       'Megosztás',
     ];
-    const first = (marks) =>
-      marks.map((m) => between(t, m, ends)).find(Boolean) ?? null;
-    out.watering = first(['💧', '🌢']);
-    const tox = first(['☠', '🐾']);
+    const findFirstMarked = (marks) =>
+      marks.map((m) => extractBetween(t, m, ends)).find(Boolean) ?? null;
+    out.watering = findFirstMarked(['💧', '🌢']);
+    const tox = findFirstMarked(['☠', '🐾']);
     out.pet = tox;
     out.kid = tox;
   }
@@ -160,6 +161,8 @@ Egy termék hibája nem állítja meg a futást. **Hagyd ki az adott terméket, 
 - egy újrapróbálás után is minden mező `null` (se értékelés, se gondozási adat).
 
 **Hiányzó „Care Guide” fül nem hiba önmagában** (pl. a The Sill ajándékcsomag-oldalain nincs ilyen fül). Ilyenkor csak a gondozási mezők (`watering`, `petSafe`, `kidSafe`) maradnak `null`-ok, a sikeresen kiolvasott `rating` / `reviewsCount` megmarad és beíródik. A státusz `ok`, a `note`: „nincs Care Guide fül — gondozási mezők null”. Ha az értékelés sem olvasható ki, az a fenti „minden mező `null`” eset, vagyis `hiba`.
+
+**Hibás JSON-LD blokk:** ha a kinyerés `skippedJsonLd` értéke nagyobb 0-nál, az oldalon volt nem értelmezhető JSON-LD blokk, amit a függvény kihagyott. A státuszt ez nem változtatja meg, de a `note`-ba írd be: „N hibás JSON-LD blokk kihagyva”. Így akkor is látszik, ha egy másik blokkból mégis lett értékelés.
 
 Hiba esetén `"status": "hiba"` és `"note": "<rövid ok>"` kerül a tételbe. A tétel `items`-beli feed-adatai változatlanok maradnak, az upsert őket rendben beírja, csak a mélyített mezői maradnak `null`-ok. A zárásban sorold fel a kihagyott termékeket az okukkal együtt.
 

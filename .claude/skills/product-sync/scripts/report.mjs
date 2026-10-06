@@ -63,8 +63,10 @@ const fmt = (field, v) => {
     return String(v).length > 80 ? `${String(v).slice(0, 80)}…` : v;
   return v;
 };
+// Csak https: link — egy javascript:/data: URL a feedből vagy a pageEnrich
+// blokkból nem lehet kattintható a riportban.
 const nameCell = (p) =>
-  p.url
+  /^https:\/\//i.test(p.url ?? '')
     ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`
     : esc(p.name);
 const discount = (p) => Math.round((1 - p.salePrice / p.price) * 100);
@@ -118,11 +120,11 @@ function render(r) {
         (k) => ENRICH_COLUMNS[k],
       )
     : [];
-  const enrichCount = (s) =>
+  const countEnrichByStatus = (s) =>
     (pe?.items ?? []).filter((p) => p.status === s).length;
   const enriched = pe
     ? `<h2>Adatlapról mélyített mezők</h2>
-  <p class="meta">Playwright MCP, legfeljebb ${esc(pe.limit ?? 10)} termék/futás · ok: ${enrichCount('ok')} · hiba: ${enrichCount('hiba')} · kihagyva: ${enrichCount('kihagyva')}</p>
+  <p class="meta">Playwright MCP, legfeljebb ${esc(pe.limit ?? 10)} termék/futás · ok: ${countEnrichByStatus('ok')} · hiba: ${countEnrichByStatus('hiba')} · kihagyva: ${countEnrichByStatus('kihagyva')}</p>
   ${table(
     [
       'Termék',
