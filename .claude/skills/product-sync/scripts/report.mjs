@@ -116,8 +116,8 @@ function render(r) {
   );
   const pe = r.pageEnrich;
   const enrichCols = pe
-    ? (pe.requested ?? Object.keys(ENRICH_COLUMNS)).filter(
-        (k) => ENRICH_COLUMNS[k],
+    ? (pe.requested ?? Object.keys(ENRICH_COLUMNS)).filter((k) =>
+        Object.hasOwn(ENRICH_COLUMNS, k),
       )
     : [];
   const countEnrichByStatus = (s) =>
