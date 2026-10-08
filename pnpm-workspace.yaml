@@ -2,9 +2,12 @@ packages:
   - 'apps/*'
   - 'packages/*'
 allowBuilds:
+  '@parcel/watcher': false
   '@prisma/engines': true
   '@swc/core': true
   esbuild: true
+  less: false
   nx: true
   prisma: true
+  sharp: false
   unrs-resolver: true

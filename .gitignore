@@ -19,3 +19,7 @@ vitest.config.*.timestamp*
 
 # Prisma generated client (packages/db) — regenerated via `prisma generate`/`migrate dev`
 packages/db/generated/
+
+# Next.js (apps/web) — build output and the auto-generated type stub
+.next/
+apps/web/next-env.d.ts
