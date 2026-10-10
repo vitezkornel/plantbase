@@ -1,0 +1,156 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user,
+.assistant {
+  padding: 10px 14px;
+  border-radius: 12px;
+  max-width: 85%;
+}
+
+.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.assistant {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.empty,
+.thinking {
+  color: var(--muted);
+}
+
+.text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.escalated {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.toolStep {
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.875rem;
+}
+
+.toolStep summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.toolLabel {
+  font-weight: 600;
+}
+
+.toolStatus {
+  color: var(--muted);
+}
+
+.running .toolStatus {
+  color: var(--accent);
+}
+
+.failed {
+  border-color: var(--danger);
+}
+
+.failed .toolStatus,
+.toolError {
+  color: var(--danger);
+}
+
+/* Referenced via styles[view.status]; no extra styling for a finished step. */
+.done {
+}
+
+.toolBody {
+  padding: 0 10px 10px;
+}
+
+.toolBody pre {
+  margin: 0;
+  padding: 8px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 6px;
+  background: var(--code-bg);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.toolHeading {
+  margin: 8px 0 4px;
+  color: var(--muted);
+}
+
+.toolError {
+  margin: 8px 0 0;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.form {
+  display: flex;
+  gap: 8px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
