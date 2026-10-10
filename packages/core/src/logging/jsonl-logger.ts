@@ -11,8 +11,9 @@ import type { ToolOutcome } from '../tools/tool-outcome.js';
 // messages, response, and token usage; B Fázis 3 adds the generated SQL
 // and its result via `sqlCalls`.
 //
-// Interpretation of "logs/<timestamp>.jsonl": one JSONL file per
-// askAgent invocation (not one growing session file) — each file happens
+// Interpretation of "logs/<timestamp>.jsonl": one JSONL file per agent
+// interaction (actually `logs/<timestamp>-<id>.jsonl`, see
+// writeInteractionLog), not one growing session file — each file happens
 // to contain exactly one line right now, but the shape stays a JSONL file
 // (not bare JSON) so a future multi-turn interaction could append more
 // than one entry to the same file without a format change.
@@ -49,7 +50,17 @@ export interface InteractionLogEntry {
   usage: AgentUsage;
   sqlCalls: SqlCallLogEntry[];
   escalated: boolean;
+  /**
+   * How the interaction ended. Set by the streaming ask-agent, which also
+   * logs errored and aborted streams; the non-streaming agents only log
+   * successful runs (they throw otherwise), so for them it is absent.
+   */
+  outcome?: InteractionOutcome;
+  /** The error message, when `outcome` is `'error'`. */
+  error?: string;
 }
+
+export type InteractionOutcome = 'ok' | 'error' | 'aborted';
 
 /**
  * Writes one JSONL log entry (a single line, `logs/<timestamp>-<id>.jsonl`)

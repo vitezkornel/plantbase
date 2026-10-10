@@ -33,7 +33,11 @@ export async function POST(request: Request): Promise<Response> {
 
   let result: ReturnType<typeof streamAskAgent>;
   try {
-    result = streamAskAgent(convertToModelMessages(messages));
+    // request.signal fires when the client stops or disconnects, so the
+    // model call is stopped server-side too (and logged as `aborted`).
+    result = streamAskAgent(convertToModelMessages(messages), {
+      abortSignal: request.signal,
+    });
   } catch (error: unknown) {
     return badRequest(error);
   }

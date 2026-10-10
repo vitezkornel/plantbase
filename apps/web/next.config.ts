@@ -12,13 +12,16 @@ const nextConfig: NextConfig = {
   // dev/build targets run Next with `--webpack` (see package.json).
   webpack: (config: {
     resolve: { extensionAlias?: Record<string, string[]> };
-  }) => {
-    config.resolve.extensionAlias = {
-      ...config.resolve.extensionAlias,
-      '.js': ['.ts', '.tsx', '.js'],
-    };
-    return config;
-  },
+  }) => ({
+    ...config,
+    resolve: {
+      ...config.resolve,
+      extensionAlias: {
+        ...config.resolve.extensionAlias,
+        '.js': ['.ts', '.tsx', '.js'],
+      },
+    },
+  }),
 };
 
 export default nextConfig;
