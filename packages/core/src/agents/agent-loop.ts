@@ -35,6 +35,10 @@ import type { ToolOutcome } from '../tools/tool-outcome.js';
 // same step cap, unknown-tool stop and tool-call extraction as this loop.
 export const MAX_ITERATIONS = 6;
 
+// Logged instead of an empty string when a tool call carries no name, so
+// such a record stands out in the JSONL log rather than looking blank.
+const UNKNOWN_TOOL_NAME = '<unknown tool>';
+
 export interface AgentLoopInput {
   model: LanguageModel;
   maxTokens: number;
@@ -205,7 +209,11 @@ export function extractToolCalls(steps: readonly StepLike[]): ToolCallRecord[] {
                 : 'Tool call did not produce a result.',
             };
 
-      records.push({ name: part.toolName ?? '', input: part.input, outcome });
+      records.push({
+        name: part.toolName ?? UNKNOWN_TOOL_NAME,
+        input: part.input,
+        outcome,
+      });
     }
   }
 
