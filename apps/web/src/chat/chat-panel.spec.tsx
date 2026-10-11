@@ -69,4 +69,41 @@ describe('ChatPanel', () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain('Hiba történt a válasz közben.');
   });
+
+  it('should close unfinished Markdown only in the last answer when the answer streams', () => {
+    const html = renderWith({
+      status: 'streaming',
+      messages: [
+        {
+          id: 'a0',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Régi: **nyitott' }],
+        },
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'És még?' }] },
+        {
+          id: 'a1',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Új: **nyitott' }],
+        },
+      ],
+    });
+
+    expect(html).toContain('Régi: **nyitott');
+    expect(html).toContain('Új: <strong>nyitott</strong>');
+  });
+
+  it('should leave the last answer untouched when the stream has stopped', () => {
+    const html = renderWith({
+      status: 'ready',
+      messages: [
+        {
+          id: 'a1',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Félbe: **nyitott' }],
+        },
+      ],
+    });
+
+    expect(html).toContain('Félbe: **nyitott');
+  });
 });

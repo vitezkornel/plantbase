@@ -5,9 +5,13 @@ import { MessageParts } from './message-parts';
 
 const ESCALATE_PREFIX = '[ESCALATE] ';
 
-function render(message: ChatMessage): string {
+function render(message: ChatMessage, isStreaming = false): string {
   return renderToStaticMarkup(
-    <MessageParts message={message} escalatePrefix={ESCALATE_PREFIX} />,
+    <MessageParts
+      message={message}
+      escalatePrefix={ESCALATE_PREFIX}
+      isStreaming={isStreaming}
+    />,
   );
 }
 
@@ -117,5 +121,28 @@ describe('MessageParts', () => {
     expect(html).toContain('Kollégának továbbítva');
     expect(html).toContain('<strong>kollégánk</strong>');
     expect(html).not.toContain('[ESCALATE]');
+  });
+
+  it('should close unfinished Markdown only in the last text part when the message streams', () => {
+    const html = render(
+      {
+        id: 'a1',
+        role: 'assistant',
+        parts: [
+          { type: 'text', text: 'Előbb: **első' },
+          {
+            type: 'tool-runSql',
+            toolCallId: 't1',
+            state: 'input-available',
+            input: { sql: 'SELECT 1' },
+          },
+          { type: 'text', text: 'Aztán: **második' },
+        ],
+      },
+      true,
+    );
+
+    expect(html).toContain('Előbb: **első');
+    expect(html).toContain('<strong>második</strong>');
   });
 });

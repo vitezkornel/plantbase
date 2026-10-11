@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remend from 'remend';
 import styles from './chat.module.css';
 
 // The model's answer is untrusted input — it can carry a prompt injection
@@ -33,6 +34,8 @@ const COMPONENTS: Components = {
 
 export interface AssistantMarkdownProps {
   text: string;
+  /** True only for the answer still arriving: closes unfinished marks. */
+  isStreaming: boolean;
 }
 
 /**
@@ -42,7 +45,12 @@ export interface AssistantMarkdownProps {
  */
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   text,
+  isStreaming,
 }: AssistantMarkdownProps) {
+  // remend only papers over a half-received chunk; a finished answer is
+  // shown exactly as the model wrote it.
+  const markdown = isStreaming ? remend(text) : text;
+
   return (
     <div className={styles.markdown}>
       <Markdown
@@ -52,7 +60,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         urlTransform={safeUrl}
         components={COMPONENTS}
       >
-        {text}
+        {markdown}
       </Markdown>
     </div>
   );

@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { AssistantMarkdown } from './assistant-markdown';
 
-function render(text: string): string {
-  return renderToStaticMarkup(<AssistantMarkdown text={text} />);
+function render(text: string, isStreaming = false): string {
+  return renderToStaticMarkup(
+    <AssistantMarkdown text={text} isStreaming={isStreaming} />,
+  );
 }
 
 const SAFE_LINK_ATTRIBUTES =
@@ -113,6 +115,40 @@ describe('AssistantMarkdown', () => {
         expect(html).toMatch(SAFE_LINK_ATTRIBUTES);
       },
     );
+  });
+
+  describe('unfinished Markdown', () => {
+    it('should close an open bold mark when the answer is streaming', () => {
+      expect(render('ár: **nyitott', true)).toContain(
+        '<strong>nyitott</strong>',
+      );
+    });
+
+    it('should render an open code fence as code when the answer is streaming', () => {
+      expect(render('```sql\nSELECT 1', true)).toMatch(
+        /<pre><code[^>]*>SELECT 1/,
+      );
+    });
+
+    it('should show an unfinished link as text when the answer is streaming', () => {
+      const html = render('Lásd [kattints](https://pel', true);
+
+      expect(html).not.toContain('<a');
+      expect(html).toContain('kattints');
+    });
+
+    it('should leave a finished answer untouched when it is not streaming', () => {
+      const html = render('ár: **nyitott', false);
+
+      expect(html).toContain('ár: **nyitott');
+      expect(html).not.toContain('<strong>');
+    });
+
+    it('should render nothing visible when a streaming answer is still empty', () => {
+      expect(render('', true)).toMatch(
+        /^<div class="_markdown_[^"]*"><\/div>$/,
+      );
+    });
   });
 
   it('should be memoized so finished answers are not re-parsed while another streams', () => {
