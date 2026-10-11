@@ -61,8 +61,14 @@ describe('nextFollowState', () => {
     expect(nextFollowState(following, at(200)).isFollowing).toBe(false);
   });
 
-  it('should keep following when the reader scrolls up within the tolerance', () => {
-    expect(nextFollowState(following, at(380)).isFollowing).toBe(true);
+  it('should stop following when the reader scrolls up even within the tolerance', () => {
+    // Smooth wheel and touch scrolling move a few px per frame: each step
+    // must count, or the next streamed chunk snaps the view back down.
+    expect(nextFollowState(following, at(380)).isFollowing).toBe(false);
+  });
+
+  it('should follow again when a reader who left the bottom scrolls down into the tolerance', () => {
+    expect(nextFollowState(reading, at(380)).isFollowing).toBe(true);
   });
 
   it('should keep following when shrinking content pulls the view up but it stays at the bottom', () => {

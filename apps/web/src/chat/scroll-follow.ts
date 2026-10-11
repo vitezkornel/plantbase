@@ -26,21 +26,31 @@ export function isNearBottom(
   return scrollHeight - clientHeight - scrollTop <= threshold;
 }
 
+// How far from the bottom still counts as "exactly at the bottom" when the
+// view moved up: shrinking content clamps scrollTop to the bottom (0 px,
+// maybe a fractional pixel off), a reader's scroll leaves it.
+const AT_BOTTOM_PX = 2;
+
 /**
- * One scroll event. Only the reader scrolling up stops the following:
- * growing content never lowers scrollTop, so a scroll event that fires
- * while a large chunk arrives cannot switch it off by itself; and content
- * that shrinks while the view stays at the bottom keeps it on.
+ * One scroll position reading. Only the reader scrolling up stops the
+ * following — any step up that leaves the very bottom, however small,
+ * since smooth wheel and touch scrolling move a few px per frame. Growing
+ * content never lowers scrollTop, so a reading taken while a large chunk
+ * arrives cannot switch it off by itself; content that shrinks while the
+ * view stays at the bottom keeps it on. Coming back near the bottom
+ * (within `NEAR_BOTTOM_PX`) resumes it.
  */
 export function nextFollowState(
   prev: FollowState,
   metrics: ScrollMetrics,
 ): FollowState {
   const scrolledUp = metrics.scrollTop < prev.lastScrollTop;
-  return {
-    isFollowing: isNearBottom(metrics) || (prev.isFollowing && !scrolledUp),
-    lastScrollTop: metrics.scrollTop,
-  };
+  const leftTheBottom = !isNearBottom(metrics, AT_BOTTOM_PX);
+  const isFollowing =
+    scrolledUp && leftTheBottom
+      ? false
+      : isNearBottom(metrics) || prev.isFollowing;
+  return { isFollowing, lastScrollTop: metrics.scrollTop };
 }
 
 /** The ↓ button shows when the reader has left the bottom and there is something to return to. */

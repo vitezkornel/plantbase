@@ -24,7 +24,7 @@ Sikeres, ha a következők mind teljesülnek:
 
 - **A fejléc összecsukása mobilon:** a felhasználó nem kérte.
 - **Többsoros beviteli mező** (`textarea`, Shift+Enter).
-- **Sima (`smooth`) görgetés:** minden ugrás `instant`, mert a sima görgetés streamelés közben lemarad és rángat.
+- **Sima (`smooth`) görgetés:** minden ugrás azonnali (`behavior: 'auto'`, CSS `scroll-behavior` nélkül), mert a sima görgetés streamelés közben lemarad és rángat.
 - **jsdom vagy Testing Library:** a jsdom nem számol layoutot (`scrollHeight` mindig 0), így a görgető hook tesztje csak a mockot mérné. A döntések a tiszta függvényekben teszteltek, a többit a kézi próba fedi.
 - **Új függőség nincs.**
 
@@ -116,11 +116,11 @@ export function shouldShowJumpButton(isFollowing: boolean, messageCount: number)
   - `scrollHeight - clientHeight - scrollTop <= threshold`, ahol az alapértelmezett `threshold` a `NEAR_BOTTOM_PX` (48 px);
   - a képernyőnél rövidebb tartalom mindig „alul” van.
 - `nextFollowState`:
-  - ha a nézet alul van, a követés **mindig** igaz;
-  - ha nincs alul, és a `scrollTop` csökkent (felfelé görgetés), a követés hamis;
+  - ha a `scrollTop` csökkent (felfelé görgetés), és a nézet elhagyta a legalját (több mint 2 px-re van tőle), a követés **hamis**, akkor is, ha a 48 px-es tűrésen belül maradt;
+  - különben, ha a nézet a tűrésen belül van alul, a követés igaz (visszagörgetéskor újraindul);
   - különben az előző állapot marad;
   - a `lastScrollTop` mindig az új `scrollTop`.
-  - **Miért:** csak a felhasználó felfelé görgetése kapcsolja ki a követést. A tartalom növekedése, például egy egyszerre érkező táblázat, soha nem csökkenti a `scrollTop`-ot, így egy közbeeső `scroll` esemény sem kapcsolja ki magától. Ha a tartalom zsugorodik (eltűnik a „Gondolkodom…” jelzés vagy egy hibaüzenet), a böngésző visszahúzhatja a nézetet, és a `scrollTop` csökken, de a nézet alul marad, így a követés megmarad.
+  - **Miért:** csak a felhasználó felfelé görgetése kapcsolja ki a követést, de abból minden lépés: a sima egérgörgő és az érintéses görgetés képkockánként csak néhány px-et mozdít, így a tűrésen belüli lépés sem maradhat „követés”, különben a következő darab visszarántaná a nézetet (független review, 2026-10-11). A tartalom növekedése, például egy egyszerre érkező táblázat, soha nem csökkenti a `scrollTop`-ot, így egy közbeeső `scroll` esemény sem kapcsolja ki magától. Ha a tartalom zsugorodik (eltűnik a „Gondolkodom…” jelzés vagy egy hibaüzenet), a böngésző visszahúzhatja a nézetet, és a `scrollTop` csökken, de a nézet alul marad, így a követés megmarad.
 - `shouldShowJumpButton`: `!isFollowing && messageCount > 0`.
 
 ### 5.2 `apps/web/src/chat/use-follow-bottom.ts` (új, kliensoldali hook)
@@ -130,9 +130,9 @@ export function shouldShowJumpButton(isFollowing: boolean, messageCount: number)
 - **Állapot:** ref-ben tárolt `FollowState`, kezdetben `{ isFollowing: true, lastScrollTop: 0 }`, mellette egy `isFollowing` React-állapot a rendereléshez.
 - **Görgetés:** passzív `scroll`-figyelő az ablakon. Minden eseménynél `nextFollowState(ref, readMetrics())`, ahol a `readMetrics` a `document.scrollingElement` méreteit olvassa.
 - **Átméretezés:** `resize`-figyelő. Ha a követés be van kapcsolva, a nézet az aljára ugrik. Ez kezeli az Android billentyűzetét.
-- **Új tartalom:** `useLayoutEffect` a `content`-re, ami a `messages` tömb, és minden streamelt darabnál új referencia. Ha a követés be van kapcsolva, a nézet az aljára ugrik. A `useLayoutEffect` miatt ez még a festés előtt történik, így nincs egy kockás villanás.
+- **Új tartalom:** `useLayoutEffect` a `content`-re, ami a `messages` tömb, és minden streamelt darabnál új referencia. A döntés előtt újraolvassa a pozíciót (`nextFollowState`), mert a `scroll` esemény képkockánként egyszer jön, a darabok viszont közben is érkezhetnek: így egy épp megtett felgörgetés is kikapcsolja a követést, és a darab nem rántja vissza. Ha a követés be van kapcsolva, a nézet az aljára ugrik. A `useLayoutEffect` miatt ez még a festés előtt történik, így nincs egy kockás villanás.
 - **`scrollToBottom()`:** visszakapcsolja a követést, és a nézet az aljára ugrik.
-- **Minden ugrás** `window.scrollTo({ top: scrollHeight, behavior: 'instant' })`.
+- **Minden ugrás** `window.scrollTo({ top: scrollHeight, behavior: 'auto' })` (az `'instant'` régebbi böngészőkben hibát dobhat).
 
 ### 5.3 Bekötés a `ChatPanel`-be
 
@@ -163,7 +163,8 @@ A meglévő módszer marad: node környezet, SSR (`renderToStaticMarkup`), és u
 - követés közben a tartalom nő, a `scrollTop` nem változik, a nézet nincs alul → a követés megmarad;
 - követés közben lefelé görgetés, de nem alulra → megmarad;
 - felfelé görgetés a tűrésen túl → nem követ;
-- felfelé görgetés a tűrésen belül → követ;
+- felfelé görgetés a tűrésen belül is → nem követ;
+- nem követ, lefelé görgetés a tűrésen belülre → újra követ;
 - **zsugorodó tartalom:** a `scrollTop` csökken, de a nézet alul marad (a „Gondolkodom…” jelzés vagy egy hibaüzenet eltűnése) → a követés megmarad;
 - nem követ, lefelé görgetés, de nem alulra → továbbra sem követ;
 - nem követ, visszagörgetés alulra → újra követ;

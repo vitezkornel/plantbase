@@ -22,11 +22,14 @@ function readMetrics(): ScrollMetrics {
   return { scrollTop, scrollHeight, clientHeight };
 }
 
-// Instant on purpose: a smooth scroll lags behind a streaming answer.
+// Not smooth on purpose: a smooth scroll lags behind a streaming answer.
+// 'auto' rather than 'instant' — no CSS sets scroll-behavior, so it jumps
+// just the same, and older browsers without 'instant' in the enum would
+// throw on it.
 function jumpToBottom(): void {
   window.scrollTo({
     top: scrollingElement().scrollHeight,
-    behavior: 'instant',
+    behavior: 'auto',
   });
 }
 
@@ -65,8 +68,13 @@ export function useFollowBottom(content: unknown): {
     };
   }, []);
 
-  // Before paint, so a new chunk never flashes below the composer.
+  // Before paint, so a new chunk never flashes below the composer. Scroll
+  // events arrive once per frame but chunks commit in between: read the
+  // position first, so a scroll the reader just made still stops the
+  // following instead of being snapped back.
   useLayoutEffect(() => {
+    stateRef.current = nextFollowState(stateRef.current, readMetrics());
+    setIsFollowing(stateRef.current.isFollowing);
     if (stateRef.current.isFollowing) {
       jumpToBottom();
     }
