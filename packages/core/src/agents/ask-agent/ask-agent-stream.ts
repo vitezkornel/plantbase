@@ -28,6 +28,7 @@ import {
   type InteractionLogEntry,
   type InteractionOutcome,
 } from '../../logging/jsonl-logger.js';
+import { logger } from '../../logging/structured-logger.js';
 import {
   extractToolCalls,
   hasUnknownToolRequest,
@@ -138,9 +139,7 @@ function createInteractionLogger(
       );
       onLogWritten?.(logPath);
     } catch (error: unknown) {
-      console.error(
-        `streamAskAgent: failed to write the interaction log: ${errorMessage(error)}`,
-      );
+      logger.error('ask_agent.log_write_failed', { error });
     }
   };
 }
