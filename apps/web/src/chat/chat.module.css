@@ -226,6 +226,8 @@
   background: var(--surface);
   color: var(--text);
   font: inherit;
+  /* Below 16px iOS Safari zooms into the page when the input is focused. */
+  font-size: 16px;
 }
 
 .button {
