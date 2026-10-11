@@ -212,6 +212,25 @@
   background: var(--bg);
 }
 
+/* Floats above the composer (the sticky composer is its containing block),
+   so showing it never changes the composer's height. */
+.jumpToBottom {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
+}
+
 .form {
   display: flex;
   gap: 8px;

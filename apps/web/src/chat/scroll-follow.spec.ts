@@ -3,6 +3,7 @@ import {
   isNearBottom,
   NEAR_BOTTOM_PX,
   nextFollowState,
+  shouldShowJumpButton,
   type ScrollMetrics,
 } from './scroll-follow';
 
@@ -81,5 +82,19 @@ describe('nextFollowState', () => {
   it('should remember the new scroll position when any scroll event arrives', () => {
     expect(nextFollowState(reading, at(250)).lastScrollTop).toBe(250);
     expect(nextFollowState(following, at(360, 960)).lastScrollTop).toBe(360);
+  });
+});
+
+describe('shouldShowJumpButton', () => {
+  it('should hide the button when the reader is following', () => {
+    expect(shouldShowJumpButton(true, 3)).toBe(false);
+  });
+
+  it('should show the button when the reader has left the bottom of a conversation', () => {
+    expect(shouldShowJumpButton(false, 3)).toBe(true);
+  });
+
+  it('should hide the button when there are no messages yet', () => {
+    expect(shouldShowJumpButton(false, 0)).toBe(false);
   });
 });

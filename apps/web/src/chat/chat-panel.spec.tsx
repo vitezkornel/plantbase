@@ -136,4 +136,15 @@ describe('ChatPanel', () => {
     expect(ready).toMatch(/^_button_/);
     expect(streaming).toBe(ready);
   });
+
+  it('should not offer the jump-to-bottom button when the reader is following', () => {
+    const html = renderWith({
+      status: 'streaming',
+      messages: [
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'Szia!' }] },
+      ],
+    });
+
+    expect(html).not.toContain('Ugrás az aljára');
+  });
 });

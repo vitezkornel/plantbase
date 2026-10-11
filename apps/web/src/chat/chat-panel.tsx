@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import styles from './chat.module.css';
 import type { ChatMessage } from './chat-message';
 import { MessageParts } from './message-parts';
+import { shouldShowJumpButton } from './scroll-follow';
 import { useFollowBottom } from './use-follow-bottom';
 
 export interface ChatPanelProps {
@@ -18,7 +19,7 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
   const { messages, sendMessage, status, stop, error } = useChat<ChatMessage>({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
-  const { scrollToBottom } = useFollowBottom(messages);
+  const { isFollowing, scrollToBottom } = useFollowBottom(messages);
   const isBusy = status === 'submitted' || status === 'streaming';
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -64,6 +65,16 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
       </ol>
 
       <div className={styles.composer}>
+        {shouldShowJumpButton(isFollowing, messages.length) && (
+          <button
+            type="button"
+            className={styles.jumpToBottom}
+            aria-label="Ugrás az aljára"
+            onClick={scrollToBottom}
+          >
+            ↓
+          </button>
+        )}
         {error && (
           <p className={styles.error} role="alert">
             {error.message}

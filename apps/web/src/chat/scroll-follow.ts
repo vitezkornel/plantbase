@@ -42,3 +42,11 @@ export function nextFollowState(
     lastScrollTop: metrics.scrollTop,
   };
 }
+
+/** The ↓ button shows when the reader has left the bottom and there is something to return to. */
+export function shouldShowJumpButton(
+  isFollowing: boolean,
+  messageCount: number,
+): boolean {
+  return !isFollowing && messageCount > 0;
+}
