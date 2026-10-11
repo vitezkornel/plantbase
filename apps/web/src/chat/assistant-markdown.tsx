@@ -32,6 +32,16 @@ const COMPONENTS: Components = {
   ),
 };
 
+// GFM footnotes (the model may cite sources this way): a visible Hungarian
+// label instead of the hidden English "Footnotes", and no "↩" back-links —
+// their in-page `#` targets fail the link allowlist and would dangle.
+const REMARK_REHYPE_OPTIONS = {
+  footnoteLabel: 'Lábjegyzetek',
+  footnoteLabelTagName: 'p',
+  footnoteLabelProperties: {},
+  footnoteBackContent: () => [],
+};
+
 export interface AssistantMarkdownProps {
   text: string;
   /** True only for the answer still arriving: closes unfinished marks. */
@@ -55,6 +65,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     <div className={styles.markdown}>
       <Markdown
         remarkPlugins={[remarkGfm]}
+        remarkRehypeOptions={REMARK_REHYPE_OPTIONS}
         skipHtml
         disallowedElements={['img']}
         urlTransform={safeUrl}

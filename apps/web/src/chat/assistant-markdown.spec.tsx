@@ -71,6 +71,18 @@ describe('AssistantMarkdown', () => {
     });
   });
 
+  describe('footnotes', () => {
+    it('should show footnotes under a Hungarian label without dangling back-links when the answer uses them', () => {
+      const html = render('Szöveg[^1]\n\n[^1]: Forrás: Gondozási kézikönyv');
+
+      expect(html).toContain('Lábjegyzetek');
+      expect(html).toContain('Forrás: Gondozási kézikönyv');
+      expect(html).not.toContain('Footnotes');
+      expect(html).not.toContain('↩');
+      expect(html).not.toContain('<a');
+    });
+  });
+
   describe('links', () => {
     it.each([
       ['javascript:', '[katt](javascript:alert(1))'],
