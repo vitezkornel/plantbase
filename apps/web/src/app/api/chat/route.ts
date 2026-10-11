@@ -7,6 +7,7 @@ import {
 import { ASK_AGENT_TOOLS, logger, streamAskAgent } from 'core';
 import { z } from 'zod';
 import type { ChatMessage } from '../../../chat/chat-message';
+import { textOnlyHistory } from './text-only-history';
 
 // The ask-agent needs Node (pg, fs logging) — never the edge runtime.
 export const runtime = 'nodejs';
@@ -45,7 +46,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     // request.signal fires when the client stops or disconnects, so the
     // model call is stopped server-side too (and logged as `aborted`).
-    result = streamAskAgent(convertToModelMessages(messages), {
+    // Only the text of the client-sent history reaches the agent (#2 of the
+    // PR #25 review): see textOnlyHistory.
+    result = streamAskAgent(convertToModelMessages(textOnlyHistory(messages)), {
       abortSignal: request.signal,
     });
   } catch (error: unknown) {
