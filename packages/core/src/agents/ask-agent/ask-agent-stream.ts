@@ -1,0 +1,179 @@
+// packages/core/src/agents/ask-agent/ask-agent-stream.ts
+//
+// The ask-agent's STREAMING entry point (`streamAskAgent`), for callers
+// that want the answer and the tool steps as they happen (today: apps/web,
+// through the `ai` package's UI-message stream). Same agent as `askAgent`
+// — same system prompt, same read-only toolset, same step cap and the
+// same JSONL interaction log — only the delivery differs: it takes a whole
+// conversation (`ModelMessage[]`) instead of one question, and returns the
+// `ai` package's `StreamTextResult` instead of awaiting the final answer.
+//
+// Framework-agnostic (architektura.md #1): no Next.js, no `UIMessage`
+// here — converting UI messages to `ModelMessage[]` and turning the result
+// into an HTTP response is the caller's job.
+
+import { anthropic } from '@ai-sdk/anthropic';
+import {
+  stepCountIs,
+  streamText,
+  type LanguageModel,
+  type ModelMessage,
+  type StepResult,
+  type StreamTextResult,
+} from 'ai';
+import { z } from 'zod';
+import '../../config/env.js';
+import {
+  writeInteractionLog,
+  type InteractionLogEntry,
+  type InteractionOutcome,
+} from '../../logging/jsonl-logger.js';
+import {
+  extractToolCalls,
+  hasUnknownToolRequest,
+  MAX_ITERATIONS,
+} from '../agent-loop.js';
+import {
+  ASK_AGENT_TOOLS,
+  ESCALATE_PREFIX,
+  extractSqlCalls,
+  MAX_TOKENS,
+  MODEL_ID,
+  type AskAgentTools,
+} from './ask-agent.js';
+import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
+
+// The conversation crosses into packages/core from the outside (a browser,
+// via apps/web) — an untrusted-input boundary (konvenciok.md "Biztonság"),
+// validated fail-fast. `system` is deliberately NOT an accepted role: the
+// system prompt is ours alone, a client must not be able to inject one.
+const StreamAskAgentInputSchema = z
+  .array(z.looseObject({ role: z.enum(['user', 'assistant', 'tool']) }))
+  .min(1, 'messages must not be empty')
+  .refine((messages) => messages.at(-1)?.role === 'user', {
+    message: 'the conversation must end with a user message',
+  });
+
+export interface StreamAskAgentOptions {
+  /** Injectable for tests; defaults to the real Anthropic provider. */
+  model?: LanguageModel;
+  /** Called with the JSONL log path once the interaction has been logged. */
+  onLogWritten?: (logPath: string) => void;
+  /** Stops the model call (and logs the interaction as `aborted`). */
+  abortSignal?: AbortSignal;
+}
+
+type AskAgentStep = StepResult<AskAgentTools>;
+
+/**
+ * Streams the ask-agent's answer to `messages` (the full conversation,
+ * ending with the user's latest message). Throws synchronously on invalid
+ * input, before any model call. Tool failures do not throw — they reach
+ * the stream as tool results/errors, exactly as in `askAgent`.
+ *
+ * FR4 / architektura.md #4: every interaction is logged exactly once —
+ * also when the stream fails (`outcome: 'error'`) or is aborted
+ * (`outcome: 'aborted'`), with the steps that had finished by then.
+ */
+export function streamAskAgent(
+  messages: ModelMessage[],
+  options: StreamAskAgentOptions = {},
+): StreamTextResult<AskAgentTools, never> {
+  StreamAskAgentInputSchema.parse(messages);
+
+  const logOnce = createInteractionLogger(messages, options.onLogWritten);
+  // onError gets no steps from the SDK, so the finished ones are kept here.
+  let finishedSteps: readonly AskAgentStep[] = [];
+
+  return streamText({
+    model: options.model ?? anthropic(MODEL_ID),
+    system: ASK_AGENT_SYSTEM_PROMPT,
+    messages,
+    tools: ASK_AGENT_TOOLS,
+    maxOutputTokens: MAX_TOKENS,
+    stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
+    abortSignal: options.abortSignal,
+    onStepFinish: (step) => {
+      finishedSteps = [...finishedSteps, step];
+    },
+    // After an error the SDK may still call onFinish (when a step had
+    // finished before it); logOnce keeps the first — the error — entry.
+    onError: ({ error }) =>
+      logOnce({
+        outcome: 'error',
+        steps: finishedSteps,
+        error: errorMessage(error),
+      }),
+    onAbort: ({ steps }) => logOnce({ outcome: 'aborted', steps }),
+    onFinish: ({ steps }) => logOnce({ outcome: 'ok', steps }),
+  });
+}
+
+interface LogRequest {
+  outcome: InteractionOutcome;
+  steps: readonly AskAgentStep[];
+  error?: string;
+}
+
+/**
+ * Returns a logger that writes the interaction's JSONL entry on its first
+ * call only — the SDK can fire more than one of onError/onAbort/onFinish
+ * for the same interaction. A logging failure must not break an answer the
+ * user is receiving, so it is reported server-side instead of thrown.
+ */
+function createInteractionLogger(
+  messages: ModelMessage[],
+  onLogWritten: ((logPath: string) => void) | undefined,
+): (request: LogRequest) => Promise<void> {
+  let isLogged = false;
+
+  return async (request) => {
+    if (isLogged) {
+      return;
+    }
+    isLogged = true;
+    try {
+      const logPath = await writeInteractionLog(
+        buildLogEntry(messages, request),
+      );
+      onLogWritten?.(logPath);
+    } catch (error: unknown) {
+      console.error(
+        `streamAskAgent: failed to write the interaction log: ${errorMessage(error)}`,
+      );
+    }
+  };
+}
+
+function buildLogEntry(
+  messages: ModelMessage[],
+  { outcome, steps, error }: LogRequest,
+): Omit<InteractionLogEntry, 'timestamp'> {
+  const lastStep = steps.at(-1);
+  const text = lastStep?.text ?? '';
+
+  return {
+    system: ASK_AGENT_SYSTEM_PROMPT,
+    messages: [...messages, ...(lastStep?.response.messages ?? [])],
+    response: text,
+    usage: {
+      inputTokens: sumTokens(steps, 'inputTokens'),
+      outputTokens: sumTokens(steps, 'outputTokens'),
+    },
+    sqlCalls: extractSqlCalls(extractToolCalls(steps)),
+    escalated: text.startsWith(ESCALATE_PREFIX),
+    outcome,
+    ...(error === undefined ? {} : { error }),
+  };
+}
+
+function sumTokens(
+  steps: readonly AskAgentStep[],
+  field: 'inputTokens' | 'outputTokens',
+): number {
+  return steps.reduce((total, step) => total + (step.usage[field] ?? 0), 0);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

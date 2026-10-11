@@ -30,7 +30,10 @@ import type { ToolOutcome } from '../tools/tool-outcome.js';
 // One user turn realistically needs at most a couple of `runSql` calls
 // (generate → run → maybe refine → run again → answer); 6 rounds gives
 // comfortable headroom above that without risking a runaway/expensive loop.
-const MAX_ITERATIONS = 6;
+// Exported (together with `hasUnknownToolRequest`/`extractToolCalls`) so the
+// streaming entry point (ask-agent/ask-agent-stream.ts) applies the exact
+// same step cap, unknown-tool stop and tool-call extraction as this loop.
+export const MAX_ITERATIONS = 6;
 
 export interface AgentLoopInput {
   model: LanguageModel;
@@ -117,13 +120,24 @@ export async function runAgentLoop(
   };
 }
 
-type GenerateTextSteps = Awaited<ReturnType<typeof generateText>>['steps'];
-type GenerateTextStep = GenerateTextSteps[number];
-type StepContentPart = GenerateTextStep['content'][number];
+// The few fields of a step's `content` parts these helpers actually read.
+// Structural on purpose: the `ai` package types each step by its toolset
+// (`StepResult<TOOLS>`), so this lets both this loop (untyped `ToolSet`)
+// and the streaming ask-agent (its concrete, typed toolset) share them.
+interface StepContentPartLike {
+  type: string;
+  toolCallId?: string;
+  toolName?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: unknown;
+}
 
-function isUnknownToolCall(
-  part: StepContentPart,
-): part is Extract<StepContentPart, { type: 'tool-call' }> {
+interface StepLike {
+  content: readonly StepContentPartLike[];
+}
+
+function isUnknownToolCall(part: StepContentPartLike): boolean {
   return part.type === 'tool-call' && NoSuchToolError.isInstance(part.error);
 }
 
@@ -134,7 +148,11 @@ function isUnknownToolCall(
  * error back and let the model retry" behavior play out — this is our own
  * wiring bug, not something the model can meaningfully recover from.
  */
-function hasUnknownToolRequest({ steps }: { steps: GenerateTextSteps }): boolean {
+export function hasUnknownToolRequest({
+  steps,
+}: {
+  steps: readonly StepLike[];
+}): boolean {
   const lastStep = steps.at(-1);
   return lastStep !== undefined && lastStep.content.some(isUnknownToolCall);
 }
@@ -145,7 +163,7 @@ function hasUnknownToolRequest({ steps }: { steps: GenerateTextSteps }): boolean
  * not a normal, model-recoverable mistake — fail loudly instead of letting
  * the model quietly paper over a bug in our code.
  */
-function assertNoUnknownToolRequests(steps: GenerateTextSteps): void {
+function assertNoUnknownToolRequests(steps: readonly StepLike[]): void {
   for (const step of steps) {
     for (const part of step.content) {
       if (isUnknownToolCall(part)) {
@@ -163,7 +181,7 @@ function assertNoUnknownToolRequests(steps: GenerateTextSteps): void {
  * `tool-result` entry, only a `tool-error` one, so relying on `toolResults`
  * alone silently drops the real validation detail behind a placeholder.
  */
-function extractToolCalls(steps: GenerateTextSteps): ToolCallRecord[] {
+export function extractToolCalls(steps: readonly StepLike[]): ToolCallRecord[] {
   const records: ToolCallRecord[] = [];
 
   for (const step of steps) {
@@ -171,8 +189,9 @@ function extractToolCalls(steps: GenerateTextSteps): ToolCallRecord[] {
       if (part.type !== 'tool-call') continue;
 
       const resultPart = step.content.find(
-        (candidate): candidate is Extract<StepContentPart, { type: 'tool-result' | 'tool-error' }> =>
-          (candidate.type === 'tool-result' || candidate.type === 'tool-error') &&
+        (candidate) =>
+          (candidate.type === 'tool-result' ||
+            candidate.type === 'tool-error') &&
           candidate.toolCallId === part.toolCallId,
       );
 
@@ -186,7 +205,7 @@ function extractToolCalls(steps: GenerateTextSteps): ToolCallRecord[] {
                 : 'Tool call did not produce a result.',
             };
 
-      records.push({ name: part.toolName, input: part.input, outcome });
+      records.push({ name: part.toolName ?? '', input: part.input, outcome });
     }
   }
 

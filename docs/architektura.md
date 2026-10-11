@@ -9,17 +9,18 @@ plantbase/
 ├── packages/core   agent-logika (LLM-hívás, runSql tool, séma-kontextus, naplózás)
 ├── packages/db     Prisma lib (séma, migráció, kliens, seed) — NEM a gyökérben
 ├── apps/cli        CLI (ask parancs + interaktív mód)
+├── apps/web        Next.js chat felület (App Router), az ask-agent streamelő belépésére kötve
 ├── docs            dokumentáció (lásd dev-workflow.md)
 └── konfig          nx, package.json, .env, docker-compose
 
-Később (NEM most): apps/api (4. óra), apps/web (5. óra)
+Később (NEM most): apps/api (4. óra)
 ```
 
 (Csak nagy vonalakban; a fájl-szintű bontást Claude generálja a konvenciók szerint.)
 
 ## Főbb technológiai döntések
 
-1. **Framework-agnostic core.** A `packages/core` nem ismeri a belépési pontokat (CLI/API/web). Új felület = új app, nem újraírás. (Mastra majd az 5. órán a core köré.)
+1. **Framework-agnostic core.** A `packages/core` nem ismeri a belépési pontokat (CLI/API/web). Új felület = új app, nem újraírás. (Mastra majd az 5. órán a core köré.) Az ask-agentnek két belépése van, ugyanazzal a prompttal, toolkészlettel, lépéslimittel és JSONL-loggal: `askAgent(question)` (egy kérdés, kész válasz; CLI, customer-chat) és `streamAskAgent(messages)` (teljes beszélgetés be, az `ai` csomag `StreamTextResult`-ja ki; az `apps/web` ebből ad `useChat`-kompatibilis UI-message streamet).
 2. **Két DB-kapcsolat, két jog.** Az ask-agent (`runSql` stb.) READ-ONLY kapcsolaton fut (`DATABASE_URL_READONLY`), csak SELECT, és NEM Prismán kérdez — ez az agent read-only marad. A Prisma READ-WRITE kapcsolaton (`DATABASE_URL`) viszi a sémát, migrációt, seedet, valamint a külön **ingest agent** írását: ez az egyetlen írásra jogosult agent, elkülönített kódúton — az `upsertProducts` toolja (`packages/core/src/ingest`, csak a `core/ingest` alúton elérhető) a `packages/db` `upsertProducts` függvényén át ír, a core nem épít saját read-write kapcsolatot. Az ask-agent (CLI `ask`, customer-chat) sosem kapja meg az ingest képességet. Egy külön **admin agent** (CLI `admin` parancs, `core/admin` alút) látja az ask-agent read-only toolkészletét plusz az `ingestProduct` toolt, amely a teljes ingest agentet futtatja — így írni csak az ingest agent elkülönített kódútján át tud.
 3. **Saját agent-loop.** Az `askAgent` az Anthropic SDK-ra (hivatalos kliens, nem nyers HTTP) épülő, kézzel írt tool-use loop, agent-framework nélkül, hogy a mechanika látható maradjon ("az alapoktól").
 4. **Átláthatóság beépítve.** Minden interakció JSONL-be naplózva; `--show-prompt` a teljes prompt megjelenítéséhez.

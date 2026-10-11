@@ -26,9 +26,27 @@ import {
 import { runAgentLoop, type ToolCallRecord } from '../agent-loop.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 
-const MODEL_ID = 'claude-sonnet-5';
-const MAX_TOKENS = 1024;
-const ESCALATE_PREFIX = '[ESCALATE] ';
+// Shared with the streaming entry point (ask-agent-stream.ts), so the two
+// ways of running the ask-agent can never drift apart.
+export const MODEL_ID = 'claude-sonnet-5';
+export const MAX_TOKENS = 1024;
+export const ESCALATE_PREFIX = '[ESCALATE] ';
+
+/**
+ * The ask-agent's toolset — read-only by design (CLAUDE.md "Két
+ * DB-kapcsolat, két jog"): the write-capable `ingestProduct` tool must
+ * never appear here (regression-tested in ask-agent.spec.ts and
+ * ask-agent-stream.spec.ts).
+ */
+export const ASK_AGENT_TOOLS = {
+  // one-line-per-tool registration (konvenciok.md)
+  [RUN_SQL_TOOL_NAME]: runSqlTool,
+  [LIST_CATEGORIES_TOOL_NAME]: listCategoriesTool,
+  [SEARCH_KNOWLEDGE_TOOL_NAME]: searchKnowledgeTool,
+  [CUSTOMER_PREFERENCES_TOOL_NAME]: customerPreferencesTool,
+};
+
+export type AskAgentTools = typeof ASK_AGENT_TOOLS;
 
 // The question crosses into packages/core from the outside (CLI argument or
 // interactive stdin line) — an external/untrusted-input boundary
@@ -78,13 +96,7 @@ export async function askAgent(
     maxTokens: MAX_TOKENS,
     system: ASK_AGENT_SYSTEM_PROMPT,
     messages,
-    tools: {
-      // one-line-per-tool registration (konvenciok.md)
-      [RUN_SQL_TOOL_NAME]: runSqlTool,
-      [LIST_CATEGORIES_TOOL_NAME]: listCategoriesTool,
-      [SEARCH_KNOWLEDGE_TOOL_NAME]: searchKnowledgeTool,
-      [CUSTOMER_PREFERENCES_TOOL_NAME]: customerPreferencesTool,
-    },
+    tools: ASK_AGENT_TOOLS,
   });
 
   const escalated = result.finalText.startsWith(ESCALATE_PREFIX);
@@ -117,7 +129,9 @@ export async function askAgent(
  * is the place that knows its only registered tool is `runSql` and what
  * its input field is called; `runAgentLoop` itself stays tool-agnostic.
  */
-function extractSqlCalls(toolCalls: ToolCallRecord[]): SqlCallLogEntry[] {
+export function extractSqlCalls(
+  toolCalls: ToolCallRecord[],
+): SqlCallLogEntry[] {
   return toolCalls
     .filter((call) => call.name === RUN_SQL_TOOL_NAME)
     .map((call) => ({

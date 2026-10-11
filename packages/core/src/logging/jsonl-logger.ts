@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ModelMessage } from 'ai';
@@ -10,8 +11,9 @@ import type { ToolOutcome } from '../tools/tool-outcome.js';
 // messages, response, and token usage; B Fázis 3 adds the generated SQL
 // and its result via `sqlCalls`.
 //
-// Interpretation of "logs/<timestamp>.jsonl": one JSONL file per
-// askAgent invocation (not one growing session file) — each file happens
+// Interpretation of "logs/<timestamp>.jsonl": one JSONL file per agent
+// interaction (actually `logs/<timestamp>-<id>.jsonl`, see
+// writeInteractionLog), not one growing session file — each file happens
 // to contain exactly one line right now, but the shape stays a JSONL file
 // (not bare JSON) so a future multi-turn interaction could append more
 // than one entry to the same file without a format change.
@@ -48,11 +50,21 @@ export interface InteractionLogEntry {
   usage: AgentUsage;
   sqlCalls: SqlCallLogEntry[];
   escalated: boolean;
+  /**
+   * How the interaction ended. Set by the streaming ask-agent, which also
+   * logs errored and aborted streams; the non-streaming agents only log
+   * successful runs (they throw otherwise), so for them it is absent.
+   */
+  outcome?: InteractionOutcome;
+  /** The error message, when `outcome` is `'error'`. */
+  error?: string;
 }
 
+export type InteractionOutcome = 'ok' | 'error' | 'aborted';
+
 /**
- * Writes one JSONL log entry (a single line, `logs/<timestamp>.jsonl`) for
- * one `askAgent` interaction. Returns the absolute path of the file written.
+ * Writes one JSONL log entry (a single line, `logs/<timestamp>-<id>.jsonl`)
+ * for one agent interaction. Returns the absolute path of the file written.
  */
 export async function writeInteractionLog(
   entry: Omit<InteractionLogEntry, 'timestamp'>,
@@ -63,7 +75,10 @@ export async function writeInteractionLog(
   // sanitize to a filesystem-safe form on every platform.
   const timestamp = new Date().toISOString();
   const safeTimestamp = timestamp.replace(/[:.]/g, '-');
-  const logPath = resolve(LOGS_DIR, `${safeTimestamp}.jsonl`);
+  // The short random suffix keeps concurrent interactions (e.g. two apps/web
+  // requests finishing in the same millisecond) from overwriting each other.
+  const uniqueSuffix = randomUUID().slice(0, 8);
+  const logPath = resolve(LOGS_DIR, `${safeTimestamp}-${uniqueSuffix}.jsonl`);
 
   const fullEntry: InteractionLogEntry = { timestamp, ...entry };
   await writeFile(logPath, `${JSON.stringify(fullEntry)}\n`, 'utf-8');

@@ -14,6 +14,9 @@
     },
     {
       "path": "./packages/rag"
+    },
+    {
+      "path": "./apps/web"
     }
   ],
   "compilerOptions": {
