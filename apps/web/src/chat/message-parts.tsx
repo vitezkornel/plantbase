@@ -1,6 +1,7 @@
 import { isToolUIPart } from 'ai';
 import styles from './chat.module.css';
 import type { ChatMessage } from './chat-message';
+import { AssistantMarkdown } from './assistant-markdown';
 import { splitEscalation } from './escalation';
 import { ToolStep } from './tool-step';
 
@@ -28,7 +29,7 @@ export function MessageParts({ message, escalatePrefix }: MessagePartsProps) {
           {isEscalated && (
             <p className={styles.escalated}>Kollégának továbbítva</p>
           )}
-          <p className={styles.text}>{text}</p>
+          <AssistantMarkdown text={text} />
         </div>
       );
     }

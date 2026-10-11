@@ -28,6 +28,7 @@
 
 .assistant {
   align-self: flex-start;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
 }
@@ -41,6 +42,78 @@
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Markdown elements bring their own spacing; pre-wrap would add blank lines. */
+.markdown {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown pre,
+.markdown .tableScroll {
+  margin: 0 0 8px;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.25rem;
+}
+
+.markdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.markdown pre {
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+/* A wide table scrolls inside the bubble instead of stretching the page. */
+.tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: normal;
+}
+
+.tableScroll table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableScroll th,
+.tableScroll td {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.tableScroll th {
+  white-space: nowrap;
+  background: var(--bg);
 }
 
 .escalated {
