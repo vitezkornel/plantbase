@@ -5,9 +5,13 @@ import { MessageParts } from './message-parts';
 
 const ESCALATE_PREFIX = '[ESCALATE] ';
 
-function render(message: ChatMessage): string {
+function render(message: ChatMessage, isStreaming = false): string {
   return renderToStaticMarkup(
-    <MessageParts message={message} escalatePrefix={ESCALATE_PREFIX} />,
+    <MessageParts
+      message={message}
+      escalatePrefix={ESCALATE_PREFIX}
+      isStreaming={isStreaming}
+    />,
   );
 }
 
@@ -80,5 +84,65 @@ describe('MessageParts', () => {
     });
 
     expect(html).toBe('');
+  });
+
+  it('should keep a user message as plain pre-wrap text when it contains Markdown or HTML', () => {
+    const html = render({
+      id: 'u1',
+      role: 'user',
+      parts: [{ type: 'text', text: '**félkövér** <b>x</b>' }],
+    });
+
+    expect(html).toMatch(/<p class="_text_[^"]*">/);
+    expect(html).toContain('**félkövér** &lt;b&gt;x&lt;/b&gt;');
+    expect(html).not.toContain('<strong>');
+  });
+
+  it('should render the answer as Markdown when the message is from the assistant', () => {
+    const html = render({
+      id: 'a1',
+      role: 'assistant',
+      parts: [{ type: 'text', text: 'A **Monstera** jó választás.' }],
+    });
+
+    expect(html).toMatch(/class="_markdown_/);
+    expect(html).toContain('<strong>Monstera</strong>');
+  });
+
+  it('should show the badge and the formatted answer when an escalated answer uses Markdown', () => {
+    const html = render({
+      id: 'a1',
+      role: 'assistant',
+      parts: [
+        { type: 'text', text: '[ESCALATE] Egy **kollégánk** jelentkezik.' },
+      ],
+    });
+
+    expect(html).toContain('Kollégának továbbítva');
+    expect(html).toContain('<strong>kollégánk</strong>');
+    expect(html).not.toContain('[ESCALATE]');
+  });
+
+  it('should close unfinished Markdown only in the last text part when the message streams', () => {
+    const html = render(
+      {
+        id: 'a1',
+        role: 'assistant',
+        parts: [
+          { type: 'text', text: 'Előbb: **első' },
+          {
+            type: 'tool-runSql',
+            toolCallId: 't1',
+            state: 'input-available',
+            input: { sql: 'SELECT 1' },
+          },
+          { type: 'text', text: 'Aztán: **második' },
+        ],
+      },
+      true,
+    );
+
+    expect(html).toContain('Előbb: **első');
+    expect(html).toContain('<strong>második</strong>');
   });
 });

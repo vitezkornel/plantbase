@@ -38,12 +38,20 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
             szobanövényt ajánlasz?”
           </li>
         )}
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <li
             key={message.id}
             className={message.role === 'user' ? styles.user : styles.assistant}
           >
-            <MessageParts message={message} escalatePrefix={escalatePrefix} />
+            <MessageParts
+              message={message}
+              escalatePrefix={escalatePrefix}
+              isStreaming={
+                status === 'streaming' &&
+                message.role === 'assistant' &&
+                index === messages.length - 1
+              }
+            />
           </li>
         ))}
         {status === 'submitted' && (
