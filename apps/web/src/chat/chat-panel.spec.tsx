@@ -106,4 +106,34 @@ describe('ChatPanel', () => {
 
     expect(html).toContain('Félbe: **nyitott');
   });
+
+  it('should keep the error and the form together in the composer below the messages', () => {
+    const html = renderWith({
+      status: 'error',
+      error: new Error('Hiba történt a válasz közben.'),
+      messages: [
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'Szia!' }] },
+      ],
+    });
+
+    const list = html.indexOf('<ol');
+    const composer = html.search(/<div class="_composer_/);
+    const alert = html.indexOf('role="alert"');
+    const form = html.indexOf('<form');
+
+    expect(composer).toBeGreaterThan(list);
+    expect(alert).toBeGreaterThan(composer);
+    expect(form).toBeGreaterThan(alert);
+  });
+
+  it('should give the send and the stop button the same sizing class when they swap', () => {
+    const buttonClass = (html: string) =>
+      html.match(/<button[^>]*class="(_button_[^"]*)"/)?.[1];
+
+    const ready = buttonClass(renderWith({ status: 'ready' }));
+    const streaming = buttonClass(renderWith({ status: 'streaming' }));
+
+    expect(ready).toMatch(/^_button_/);
+    expect(streaming).toBe(ready);
+  });
 });

@@ -59,39 +59,41 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
         )}
       </ol>
 
-      {error && (
-        <p className={styles.error} role="alert">
-          {error.message}
-        </p>
-      )}
-
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <input
-          className={styles.input}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Írd be a kérdésed…"
-          aria-label="Kérdés"
-          disabled={isBusy}
-        />
-        {isBusy ? (
-          <button
-            type="button"
-            className={styles.button}
-            onClick={() => void stop()}
-          >
-            Leállítás
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className={styles.button}
-            disabled={input.trim() === ''}
-          >
-            Küldés
-          </button>
+      <div className={styles.composer}>
+        {error && (
+          <p className={styles.error} role="alert">
+            {error.message}
+          </p>
         )}
-      </form>
+
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <input
+            className={styles.input}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Írd be a kérdésed…"
+            aria-label="Kérdés"
+            disabled={isBusy}
+          />
+          {isBusy ? (
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void stop()}
+            >
+              Leállítás
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className={styles.button}
+              disabled={input.trim() === ''}
+            >
+              Küldés
+            </button>
+          )}
+        </form>
+      </div>
     </section>
   );
 }
