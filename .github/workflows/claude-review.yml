@@ -8,6 +8,15 @@
 #      domain part is covered by 1., so it is not checked twice).
 # Both run through anthropics/claude-code-action on the PR's changed files.
 #
+# The check fails when the convention-audit report is missing (it used to go
+# green without one). PRs that touch no code (packages/, apps/) skip that
+# audit on purpose and stay green. Claude's full transcript
+# (claude-execution-output.json) is uploaded as a 3-day artifact for
+# diagnosis — only after a secret scan, since the repo is public; the
+# action's show_full_output stays off for the same reason. The transcript
+# holds every file Claude read, and the action itself writes the job token
+# into .git/config (origin URL), so the scan is what keeps it out.
+#
 # Note: on PRs the action restores .claude/, CLAUDE.md, .mcp.json etc. from
 # the base branch (PR head is untrusted) and keeps the PR's versions under
 # .claude-pr/ — the prompt points the auditors there for those paths.
@@ -46,7 +55,8 @@ jobs:
       # The PR diff, prepared deterministically for the subagent (which
       # has no Bash): the changed-file list and the full diff vs. the base.
       # Also decides — without a model call — whether the PR touches any
-      # domain source the ddd-audit skill watches.
+      # domain source the ddd-audit skill watches, and whether it touches
+      # any code the convention audit measures (packages/, apps/).
       - name: Prepare PR diff
         id: diff
         env:
@@ -64,8 +74,17 @@ jobs:
             echo "domain=false" >> "$GITHUB_OUTPUT"
           fi
           echo "Domain-relevant files:"; cat tmp/pr-domain-files.txt || true
+          # The convention audit's yardstick is the packages/ and apps/ code
+          # (.claude/agents/convention-audit.md) — nothing to measure without it.
+          if grep -E '^(packages|apps)/' tmp/pr-files.txt > tmp/pr-code-files.txt; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Code files:"; cat tmp/pr-code-files.txt || true
 
       - name: Run DDD + convention audit
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -78,6 +97,7 @@ jobs:
             BASE: ${{ github.event.pull_request.base.sha }}
             HEAD: ${{ github.event.pull_request.head.sha }}
             DOMAIN_TOUCHED: ${{ steps.diff.outputs.domain }}
+            CODE_TOUCHED: ${{ steps.diff.outputs.code }}
 
             Két riportot készítesz erre a PR-re. A PR ágát már kicsekkoltuk.
             - A változott fájlok listája: tmp/pr-files.txt
@@ -139,12 +159,28 @@ jobs:
 
             ## 2. Convention audit (subagent → tmp/convention-audit.md)
 
-            Futtasd le a `convention-audit` subagentet (.claude/agents/convention-audit.md).
+            Ha CODE_TOUCHED = false: ezt a részt teljesen hagyd ki — ne indíts subagentet,
+            és a tmp/convention-audit.md-t se hozd létre (a workflow maga jelzi a kihagyást).
+            A végső üzeneted utolsó sora ekkor: `CONVENTION_REPORT: skipped (no code)`.
+
+            Ha CODE_TOUCHED = true: futtasd le a `convention-audit` subagentet (.claude/agents/convention-audit.md).
             Add át neki: CSAK a kódkonvenciókat (docs/konvenciok.md) mérje, CSAK a
             tmp/pr-files.txt fájljain és a tmp/pr-diff.patch érintett részein (a
             Claude-konfig útvonalaknál a .claude-pr/ alatti PR-változatot olvassa). A
             domain-modell (docs/ddd/) mércét most hagyja ki teljesen — azt az 1. rész
             fedi le —, a riportjában ezt egy mondatban jelezze.
+
+            KÖTELEZŐ LEZÁRÁS (CODE_TOUCHED = true esetén) — a workflow piros lesz, ha a
+            riport hiányzik:
+            - A subagentet előtérben indítsd, ne háttérben (ne run_in_background). Ha mégis
+              háttérben fut, várd meg a befejezési értesítését, mielőtt bármi mást tennél.
+            - Ne adj végső választ, és ne zárd le a munkamenetet, amíg a Read toollal nem
+              ellenőrizted, hogy a tmp/convention-audit.md létezik és nem üres.
+            - Ha hiányzik vagy üres: indítsd újra a subagentet egyszer, előtérben, és
+              ellenőrizd újra.
+            - A tmp/convention-audit.md-t soha ne írd meg magad — csak a subagent írhatja.
+            - A végső üzeneted utolsó sora pontosan egy ezek közül:
+              `CONVENTION_REPORT: present` vagy `CONVENTION_REPORT: missing (<rövid ok>)`.
           claude_args: |
             --max-turns 60
             --allowedTools "Skill,Task,Agent,Read,Glob,Grep,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
@@ -156,6 +192,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CODE_TOUCHED: ${{ steps.diff.outputs.code }}
         run: |
           {
             echo "## 🧭 DDD-audit (csak javaslat — a \`docs/ddd/\`-t nem módosítja)"
@@ -170,10 +207,14 @@ jobs:
             echo
             echo "## 🔎 Convention audit"
             echo
-            if [ -s tmp/convention-audit.md ]; then
+            if [ "$CODE_TOUCHED" != "true" ]; then
+              echo "A PR nem érint kódot (\`packages/\`, \`apps/\`) — convention audit nem szükséges."
+            elif [ -s tmp/convention-audit.md ]; then
               cat tmp/convention-audit.md
             else
-              echo "_A convention-audit nem készített riportot — lásd a workflow logját: ${RUN_URL}_"
+              echo "❌ **A convention-audit riport hiányzik — a check emiatt piros.**"
+              echo
+              echo "_A convention-audit nem készített riportot — lásd a workflow logját és a \`claude-execution-output\` artifactot: ${RUN_URL}_"
             fi
             echo
             echo "---"
@@ -181,3 +222,54 @@ jobs:
           } > tmp/pr-comment.md
           # One comment per PR, updated on every push instead of piling up.
           gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body-file tmp/pr-comment.md
+
+      # The transcript is uploaded only if it holds none of this job's secrets
+      # nor anything token-shaped. Matches are never printed — only the fact.
+      - name: Scan execution output for secrets
+        id: scan
+        if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          ANTHROPIC_KEY_VALUE: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN_VALUE: ${{ github.token }}
+        run: |
+          if [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
+            echo "::notice::No execution output to upload."
+            echo "safe=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          found=false
+          for value in "$ANTHROPIC_KEY_VALUE" "$GITHUB_TOKEN_VALUE"; do
+            if [ -n "$value" ] && grep -qF -- "$value" "$EXECUTION_FILE"; then
+              found=true
+            fi
+          done
+          if grep -qE '(ghp_|ghs_|gho_|ghu_|ghr_|github_pat_)[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' "$EXECUTION_FILE"; then
+            found=true
+          fi
+          if [ "$found" = true ]; then
+            echo "::warning::Possible secret in the execution output — the artifact is not uploaded."
+            echo "safe=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "safe=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload execution output
+        if: always() && steps.scan.outputs.safe == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: claude-execution-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 3
+          if-no-files-found: warn
+
+      # Last, so the comment and the artifact are in place before it fails.
+      # Skipped when the PR touches no code: the audit was not needed.
+      - name: Require convention-audit report
+        if: always() && steps.diff.outputs.code == 'true'
+        run: |
+          if [ ! -s tmp/convention-audit.md ]; then
+            echo "::error::The convention-audit report (tmp/convention-audit.md) is missing or empty."
+            exit 1
+          fi
+          echo "Convention-audit report present."
