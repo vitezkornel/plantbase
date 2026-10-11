@@ -28,6 +28,7 @@ import {
   type InteractionLogEntry,
   type InteractionOutcome,
 } from '../../logging/jsonl-logger.js';
+import { logger } from '../../logging/structured-logger.js';
 import {
   extractToolCalls,
   hasUnknownToolRequest,
@@ -47,8 +48,22 @@ import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 // via apps/web) — an untrusted-input boundary (konvenciok.md "Biztonság"),
 // validated fail-fast. `system` is deliberately NOT an accepted role: the
 // system prompt is ours alone, a client must not be able to inject one.
+// Nor is `tool`, and an earlier assistant turn may only be text: a
+// client-sent history could otherwise hand the model forged tool calls and
+// "database results" — the agent re-runs its tools when it needs data.
+const StreamAskAgentMessageSchema = z.union([
+  z.looseObject({ role: z.literal('user') }),
+  z.looseObject({
+    role: z.literal('assistant'),
+    content: z.union([
+      z.string(),
+      z.array(z.looseObject({ type: z.literal('text') })),
+    ]),
+  }),
+]);
+
 const StreamAskAgentInputSchema = z
-  .array(z.looseObject({ role: z.enum(['user', 'assistant', 'tool']) }))
+  .array(StreamAskAgentMessageSchema)
   .min(1, 'messages must not be empty')
   .refine((messages) => messages.at(-1)?.role === 'user', {
     message: 'the conversation must end with a user message',
@@ -138,9 +153,7 @@ function createInteractionLogger(
       );
       onLogWritten?.(logPath);
     } catch (error: unknown) {
-      console.error(
-        `streamAskAgent: failed to write the interaction log: ${errorMessage(error)}`,
-      );
+      logger.error('ask_agent.log_write_failed', { error });
     }
   };
 }
