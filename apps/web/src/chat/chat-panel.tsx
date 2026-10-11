@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import styles from './chat.module.css';
 import type { ChatMessage } from './chat-message';
 import { MessageParts } from './message-parts';
+import { useFollowBottom } from './use-follow-bottom';
 
 export interface ChatPanelProps {
   /** core's ESCALATE_PREFIX, handed down by the server component. */
@@ -17,6 +18,7 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
   const { messages, sendMessage, status, stop, error } = useChat<ChatMessage>({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
+  const { scrollToBottom } = useFollowBottom(messages);
   const isBusy = status === 'submitted' || status === 'streaming';
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -25,6 +27,8 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
     if (text === '' || isBusy) {
       return;
     }
+    // Sending means "show me the answer": follow it even if scrolled up.
+    scrollToBottom();
     void sendMessage({ text });
     setInput('');
   }
