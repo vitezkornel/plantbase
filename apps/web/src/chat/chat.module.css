@@ -1,4 +1,5 @@
 .panel {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -197,6 +198,39 @@
   color: var(--danger);
 }
 
+/* Pinned to the bottom of the window: margin-top: auto for a short chat,
+   sticky for a long one. Opaque, so messages scroll behind it. */
+.composer {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* Floats above the composer (the sticky composer is its containing block),
+   so showing it never changes the composer's height. */
+.jumpToBottom {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
+}
+
 .form {
   display: flex;
   gap: 8px;
@@ -211,9 +245,13 @@
   background: var(--surface);
   color: var(--text);
   font: inherit;
+  /* Below 16px iOS Safari zooms into the page when the input is focused. */
+  font-size: 16px;
 }
 
 .button {
+  /* Send and Stop share it, so swapping them moves nothing. */
+  min-width: 7.5rem;
   padding: 10px 16px;
   border: 0;
   border-radius: 8px;

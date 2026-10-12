@@ -6,6 +6,8 @@ import { useState, type FormEvent } from 'react';
 import styles from './chat.module.css';
 import type { ChatMessage } from './chat-message';
 import { MessageParts } from './message-parts';
+import { shouldShowJumpButton } from './scroll-follow';
+import { useFollowBottom } from './use-follow-bottom';
 
 export interface ChatPanelProps {
   /** core's ESCALATE_PREFIX, handed down by the server component. */
@@ -17,6 +19,7 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
   const { messages, sendMessage, status, stop, error } = useChat<ChatMessage>({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
+  const { isFollowing, scrollToBottom } = useFollowBottom(messages);
   const isBusy = status === 'submitted' || status === 'streaming';
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -25,6 +28,8 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
     if (text === '' || isBusy) {
       return;
     }
+    // Sending means "show me the answer": follow it even if scrolled up.
+    scrollToBottom();
     void sendMessage({ text });
     setInput('');
   }
@@ -59,39 +64,51 @@ export function ChatPanel({ escalatePrefix }: ChatPanelProps) {
         )}
       </ol>
 
-      {error && (
-        <p className={styles.error} role="alert">
-          {error.message}
-        </p>
-      )}
-
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <input
-          className={styles.input}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Írd be a kérdésed…"
-          aria-label="Kérdés"
-          disabled={isBusy}
-        />
-        {isBusy ? (
+      <div className={styles.composer}>
+        {shouldShowJumpButton(isFollowing, messages.length) && (
           <button
             type="button"
-            className={styles.button}
-            onClick={() => void stop()}
+            className={styles.jumpToBottom}
+            aria-label="Ugrás az aljára"
+            onClick={scrollToBottom}
           >
-            Leállítás
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className={styles.button}
-            disabled={input.trim() === ''}
-          >
-            Küldés
+            ↓
           </button>
         )}
-      </form>
+        {error && (
+          <p className={styles.error} role="alert">
+            {error.message}
+          </p>
+        )}
+
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <input
+            className={styles.input}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Írd be a kérdésed…"
+            aria-label="Kérdés"
+            disabled={isBusy}
+          />
+          {isBusy ? (
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => void stop()}
+            >
+              Leállítás
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className={styles.button}
+              disabled={input.trim() === ''}
+            >
+              Küldés
+            </button>
+          )}
+        </form>
+      </div>
     </section>
   );
 }
