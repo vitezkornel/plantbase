@@ -1,5 +1,8 @@
 import type { VoiceEvent } from './voice-events';
-import type { HistoryMessage } from './voice-request-schema';
+import {
+  MAX_HISTORY_MESSAGE_CHARS,
+  type HistoryMessage,
+} from './voice-request-schema';
 
 export type TurnStatus =
   | 'transcribing'
@@ -131,11 +134,14 @@ export function historyFor(
     if (turn.status !== 'done' || turn.transcript === null || turn.text === '') {
       return [];
     }
+    // One long answer must not make the server reject every later turn.
+    const cut = (text: string): string =>
+      text.slice(0, MAX_HISTORY_MESSAGE_CHARS);
     return [
-      { role: 'user', content: turn.transcript },
+      { role: 'user', content: cut(turn.transcript) },
       {
         role: 'assistant',
-        content: (turn.isEscalated ? escalatePrefix : '') + turn.text,
+        content: cut((turn.isEscalated ? escalatePrefix : '') + turn.text),
       },
     ];
   });

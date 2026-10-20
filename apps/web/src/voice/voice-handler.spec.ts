@@ -215,8 +215,9 @@ describe('POST /api/voice (handler)', () => {
     async function* parts() {
       yield { type: 'text-delta' as const, id: 't', text: 'Elkezdem. ' };
       controller.abort();
-      // what the AI SDK does when its abortSignal fires
-      throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+      // What ai@5 streamText does when its abortSignal fires: it does not
+      // throw, it emits an `abort` part and ends the stream normally.
+      yield { type: 'abort' as const };
     }
     vi.mocked(streamAskAgent).mockReturnValue({
       fullStream: parts(),

@@ -163,6 +163,9 @@ export async function runVoiceTurn({
         throw part.error;
       }
     }
+    // ai@5 ends the stream normally when the signal fires (an `abort` part,
+    // no throw), so the abort is turned into a rejection here.
+    signal.throwIfAborted();
     splitter.flush().forEach(speak);
     await queue.finish();
   } finally {

@@ -13,13 +13,16 @@ export const ALLOWED_AUDIO_TYPES: readonly string[] = [
   'audio/m4a',
 ];
 
+/** Per history message; the client cuts its own history to this, too. */
+export const MAX_HISTORY_MESSAGE_CHARS = 2000;
+
 const ALLOWED_FIELDS: ReadonlySet<string> = new Set(['audio', 'history']);
 
 const HistorySchema = z
   .array(
     z.strictObject({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1).max(2000),
+      content: z.string().min(1).max(MAX_HISTORY_MESSAGE_CHARS),
     }),
   )
   .max(20);

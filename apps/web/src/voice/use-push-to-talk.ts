@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createAttemptGuard } from './attempt-guard';
 import {
   nextPttPhase,
   type PttEvent,
@@ -43,6 +44,7 @@ export function usePushToTalk(options: UsePushToTalkOptions): PushToTalk {
   optionsRef.current = options;
   const phaseRef = useRef<PttPhase>('idle');
   const dispatchRef = useRef<(event: PttEvent) => void>(() => undefined);
+  const guardRef = useRef(createAttemptGuard());
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -68,15 +70,20 @@ export function usePushToTalk(options: UsePushToTalkOptions): PushToTalk {
       failStart(NO_RECORDER);
       return;
     }
+    const attempt = guardRef.current.begin();
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      failStart(MIC_DENIED);
+      if (guardRef.current.isCurrent(attempt)) {
+        failStart(MIC_DENIED);
+      }
       return;
     }
-    if (phaseRef.current !== 'recording') {
-      // released while the permission prompt was open
+    if (!guardRef.current.isCurrent(attempt)) {
+      // released (or pressed again) while the permission prompt was open:
+      // this attempt is stale, so it must not record, and must not keep the
+      // microphone on.
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
@@ -110,6 +117,7 @@ export function usePushToTalk(options: UsePushToTalkOptions): PushToTalk {
         optionsRef.current.onPressStart();
         void startRecording();
       } else if (action === 'stop' || action === 'discard') {
+        guardRef.current.invalidate();
         clearTimeout(timeoutRef.current);
         discardRef.current = action === 'discard';
         const recorder = recorderRef.current;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_HISTORY_MESSAGE_CHARS } from './voice-request-schema';
 import {
   historyFor,
   initialVoiceState,
@@ -128,6 +129,24 @@ describe('historyFor', () => {
     );
 
     expect(historyFor(state, PREFIX)).toEqual([]);
+  });
+
+  it('should cut a long answer so the server still accepts the history', () => {
+    const state = run(
+      started,
+      event({ type: 'transcript', text: 'Mesélj sokat', sttMs: 1 }),
+      event({ type: 'text-delta', text: 'v'.repeat(3000) }),
+      event({ type: 'done' }),
+    );
+
+    const history = historyFor(state, PREFIX);
+
+    expect(history).toHaveLength(2);
+    for (const message of history) {
+      expect(message.content.length).toBeLessThanOrEqual(
+        MAX_HISTORY_MESSAGE_CHARS,
+      );
+    }
   });
 
   it('should keep at most the last 20 messages', () => {

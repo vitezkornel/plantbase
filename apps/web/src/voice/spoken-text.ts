@@ -103,12 +103,25 @@ export function createSpokenBudget(
       if (isClosed) {
         return null;
       }
-      if (used > 0 && used + sentence.length > max) {
+      if (used + sentence.length > max) {
         isClosed = true;
-        return CLOSING_SENTENCE;
+        // The very first chunk can already be over budget (an answer with no
+        // sentence end): cut it, so the per-turn cap always holds.
+        return used === 0
+          ? `${cutAtWord(sentence, max)}. ${CLOSING_SENTENCE}`
+          : CLOSING_SENTENCE;
       }
       used += sentence.length;
       return sentence;
     },
   };
+}
+
+function cutAtWord(text: string, max: number): string {
+  const cut = text.slice(0, max);
+  const next = text[max];
+  const atBoundary = next === undefined || /\s/.test(next);
+  const lastSpace = cut.lastIndexOf(' ');
+  const word = atBoundary || lastSpace <= 0 ? cut : cut.slice(0, lastSpace);
+  return word.replace(/[\s,;:]+$/, '');
 }

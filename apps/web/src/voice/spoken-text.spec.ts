@@ -84,11 +84,34 @@ describe('createSpokenBudget', () => {
     expect(budget.take('Ez sem.')).toBeNull();
   });
 
-  it('should always allow the first sentence even if it exceeds the budget', () => {
+  it('should cut an over-long first sentence at a word boundary and close with the closing line', () => {
+    const budget = createSpokenBudget(15);
+
+    expect(budget.take('Ez egy nagyon hosszú mondat, ami nem fér bele.')).toBe(
+      `Ez egy nagyon. ${CLOSING_SENTENCE}`,
+    );
+    expect(budget.take('Ez már nem hangzik el.')).toBeNull();
+  });
+
+  it('should keep a cut that ends exactly at a word boundary whole', () => {
+    const budget = createSpokenBudget(9);
+
+    expect(budget.take('Egy kettő hármas')).toBe(
+      `Egy kettő. ${CLOSING_SENTENCE}`,
+    );
+  });
+
+  it('should not eat the last letter of the last kept word', () => {
+    const budget = createSpokenBudget(8);
+
+    expect(budget.take('Sok fás nagyon hosszú')).toBe(
+      `Sok fás. ${CLOSING_SENTENCE}`,
+    );
+  });
+
+  it('should cut a single over-long word at the budget', () => {
     const budget = createSpokenBudget(5);
 
-    expect(budget.take('Egy nagyon hosszú első mondat.')).toBe(
-      'Egy nagyon hosszú első mondat.',
-    );
+    expect(budget.take('Abcdefghijkl')).toBe(`Abcde. ${CLOSING_SENTENCE}`);
   });
 });
