@@ -121,6 +121,16 @@ hogy a Cohere embedding ára rendkívül alacsony a Claude generálási
 áraihoz képest, így a válaszgenerálás (nem a keresés) a domináns
 költségtényező egy kérdésnél.
 
+## Hangfunkció (`/voice`, `apps/web`)
+
+A `pnpm nx dev web` után a `http://localhost:3001/voice` oldalon nyomva tartott gombbal (vagy a szóközzel) magyarul lehet kérdezni: a beszéd átirata (STT) a meglévő ask-agentnek megy `voice` módban, a választ mondatonként felolvassa a TTS, a waterfall panel pedig mutatja az időket (STT, első token, első hang, összesen; zöld < 800 ms, piros > 1500 ms) és a köztes szövegeket. A gomb újbóli megnyomása leállítja a felolvasást és a streamet.
+
+- **Szükséges:** `OPENAI_API_KEY` a gyökér `.env`-ben (csak szerveroldalon használjuk; nélküle a `/voice` érthető hibát ad).
+- **Opcionális felülírások:** `VOICE_STT_MODEL` (alap: `gpt-transcribe`; tartalék: `gpt-4o-transcribe`), `VOICE_TTS_MODEL` (alap: `gpt-4o-mini-tts`), `VOICE_TTS_VOICE` (alap: `coral`).
+- **Korlátok:** legfeljebb 30 s felvétel, 2 MB hang, fordulónként legfeljebb 1200 karakter felolvasott szöveg.
+- **Napló:** hangot nem tárolunk; az átirat csak a JSONL interakció-naplóba kerül, az üzemi logba csak esemény és ms.
+- **Mérések:** a kézi próba eredményeit a [`docs/voice-meresek.md`](docs/voice-meresek.md) sablonba kell írni.
+
 ## Architektúra
 
 Nx monorepo (pnpm), öt projekt:
@@ -129,6 +139,7 @@ Nx monorepo (pnpm), öt projekt:
 - **`packages/db`** — Prisma séma, migráció, seed; a **read-write** DB-kapcsolatot birtokolja (a `products` katalógus és a RAG `knowledge_chunks` táblája is itt kap sémát).
 - **`packages/rag`** — a RAG-tudásbázis ingest-oldala: cikk-parsolás, boilerplate-szűrés, heading-alapú chunkolás, Cohere embedding, pgvector-írás. Lásd `docs/rag-proposal.md`.
 - **`apps/cli`** — a parancssori felület (commander), csak I/O-réteg `packages/core` felett.
+- **`apps/web`** — Next.js chat felület (`/`) és hangos felület (`/voice`) az ask-agent streamelő belépésére kötve.
 - **`apps/customer-chat`** — minimális, ügyfél felé forduló webes chat demo (PoC), (PoC, nincs hozzá build-target) amely a `packages/core` `askAgent`-jét emberi jóváhagyási ponttal (eszkalációval) egészíti ki. Lásd [`apps/customer-chat/README.md`](apps/customer-chat/README.md).
 
 **Két DB-kapcsolat, két jog**: `DATABASE_URL` (read-write, Prisma migrate/seed, `packages/db`) és `DATABASE_URL_READONLY` (csak SELECT, a `plantbase_readonly` role-lal, közvetlen `pg` klienssel — NEM Prismán keresztül — az agent `runSql`/`listCategories` toolja ezt használja). A kettő szándékosan el van választva: az agentnek fizikailag nincs lehetősége írni az adatbázisba, még egy prompt-injection vagy guard-hiba esetén sem.
