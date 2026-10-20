@@ -43,6 +43,7 @@ import {
   type AskAgentTools,
 } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
+import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
 
 // The conversation crosses into packages/core from the outside (a browser,
 // via apps/web) — an untrusted-input boundary (konvenciok.md "Biztonság"),
@@ -69,7 +70,12 @@ const StreamAskAgentInputSchema = z
     message: 'the conversation must end with a user message',
   });
 
+/** `text` (default) is the shared prompt as is; `voice` appends the spoken-answer section. */
+export type AskAgentMode = 'text' | 'voice';
+
 export interface StreamAskAgentOptions {
+  /** Which prompt variant to run; defaults to `text`. */
+  mode?: AskAgentMode;
   /** Injectable for tests; defaults to the real Anthropic provider. */
   model?: LanguageModel;
   /** Called with the JSONL log path once the interaction has been logged. */
@@ -96,13 +102,18 @@ export function streamAskAgent(
 ): StreamTextResult<AskAgentTools, never> {
   StreamAskAgentInputSchema.parse(messages);
 
-  const logOnce = createInteractionLogger(messages, options.onLogWritten);
+  const system = systemPromptFor(options.mode ?? 'text');
+  const logOnce = createInteractionLogger(
+    messages,
+    system,
+    options.onLogWritten,
+  );
   // onError gets no steps from the SDK, so the finished ones are kept here.
   let finishedSteps: readonly AskAgentStep[] = [];
 
   return streamText({
     model: options.model ?? anthropic(MODEL_ID),
-    system: ASK_AGENT_SYSTEM_PROMPT,
+    system,
     messages,
     tools: ASK_AGENT_TOOLS,
     maxOutputTokens: MAX_TOKENS,
@@ -138,6 +149,7 @@ interface LogRequest {
  */
 function createInteractionLogger(
   messages: ModelMessage[],
+  system: string,
   onLogWritten: ((logPath: string) => void) | undefined,
 ): (request: LogRequest) => Promise<void> {
   let isLogged = false;
@@ -149,7 +161,7 @@ function createInteractionLogger(
     isLogged = true;
     try {
       const logPath = await writeInteractionLog(
-        buildLogEntry(messages, request),
+        buildLogEntry(messages, system, request),
       );
       onLogWritten?.(logPath);
     } catch (error: unknown) {
@@ -160,13 +172,14 @@ function createInteractionLogger(
 
 function buildLogEntry(
   messages: ModelMessage[],
+  system: string,
   { outcome, steps, error }: LogRequest,
 ): Omit<InteractionLogEntry, 'timestamp'> {
   const lastStep = steps.at(-1);
   const text = lastStep?.text ?? '';
 
   return {
-    system: ASK_AGENT_SYSTEM_PROMPT,
+    system,
     messages: [...messages, ...(lastStep?.response.messages ?? [])],
     response: text,
     usage: {
@@ -189,4 +202,10 @@ function sumTokens(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function systemPromptFor(mode: AskAgentMode): string {
+  return mode === 'voice'
+    ? ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION
+    : ASK_AGENT_SYSTEM_PROMPT;
 }

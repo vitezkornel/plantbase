@@ -101,3 +101,5 @@ products (
 </example>
 </examples>
 ```
+
+> **Voice mód:** a `/voice` oldal (`streamAskAgent(..., { mode: 'voice' })`) ehhez a prompthoz még hozzáfűzi a `<voice>` szekciót; annak szövege nem itt, hanem a `packages/core/src/agents/ask-agent/voice-prompt.ts` `VOICE_PROMPT_SECTION` konstansában él (így nincs új szinkron-teher).

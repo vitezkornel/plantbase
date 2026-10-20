@@ -4,6 +4,7 @@ import { MockLanguageModelV2, simulateReadableStream } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 import { streamAskAgent } from './ask-agent-stream.js';
+import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
 
 // Same isolation as ask-agent.spec.ts: only the DB round-trip is mocked,
 // so the real runSql-tool wiring (Zod schema + guard) still runs.
@@ -366,5 +367,58 @@ describe('streamAskAgent toolset (read-only guarantee)', () => {
     ]);
 
     await rm(logPath, { force: true });
+  });
+});
+
+describe('streamAskAgent mode', () => {
+  function systemSentTo(model: MockLanguageModelV2): string {
+    const first = model.doStreamCalls[0]?.prompt[0];
+    return first?.role === 'system' ? first.content : '';
+  }
+
+  async function runWithMode(mode: 'text' | 'voice' | undefined) {
+    const model = makeModel('Szia!');
+    let resolveLogPath: (path: string) => void = () => undefined;
+    const logPathPromise = new Promise<string>((resolve) => {
+      resolveLogPath = resolve;
+    });
+    const result = streamAskAgent(question, {
+      model,
+      ...(mode === undefined ? {} : { mode }),
+      onLogWritten: resolveLogPath,
+    });
+    await result.text;
+    return { model, logPath: await logPathPromise };
+  }
+
+  it('should send the shared prompt byte for byte when no mode is given', async () => {
+    const { model, logPath } = await runWithMode(undefined);
+    await rm(logPath, { force: true });
+
+    expect(systemSentTo(model)).toBe(ASK_AGENT_SYSTEM_PROMPT);
+  });
+
+  it('should send the shared prompt byte for byte in text mode', async () => {
+    const { model, logPath } = await runWithMode('text');
+    await rm(logPath, { force: true });
+
+    expect(systemSentTo(model)).toBe(ASK_AGENT_SYSTEM_PROMPT);
+  });
+
+  it('should append the voice section after the shared prompt in voice mode', async () => {
+    const { model, logPath } = await runWithMode('voice');
+    await rm(logPath, { force: true });
+
+    expect(systemSentTo(model)).toBe(
+      ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION,
+    );
+  });
+
+  it('should log the effective system prompt in voice mode', async () => {
+    const { logPath } = await runWithMode('voice');
+
+    const entry = JSON.parse((await readFile(logPath, 'utf-8')).trim());
+    await rm(logPath, { force: true });
+    expect(entry.system).toBe(ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION);
   });
 });
