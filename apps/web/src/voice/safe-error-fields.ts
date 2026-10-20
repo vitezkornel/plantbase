@@ -2,10 +2,12 @@
 // request body (for TTS: the sentence being spoken), so only the error's
 // name and HTTP status ever reach the ops log (CLAUDE.md: no user content).
 
-export interface SafeErrorFields {
+// A type alias, not an interface: it must be assignable to the logger's
+// `Record<string, unknown>` fields.
+export type SafeErrorFields = {
   errorName: string;
   statusCode?: number;
-}
+};
 
 export function safeErrorFields(error: unknown): SafeErrorFields {
   if (typeof error !== 'object' || error === null) {
