@@ -1,0 +1,127 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.talk {
+  min-height: 72px;
+  font-size: 1.1rem;
+  color: var(--text);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.talk[data-recording='true'] {
+  outline: 3px solid var(--accent);
+}
+
+.talk:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.turn {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+}
+
+.transcript {
+  font-weight: 600;
+  margin: 0;
+}
+
+.answer,
+.tools {
+  margin: 0;
+}
+
+.tools {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.escalated {
+  align-self: flex-start;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 5rem;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--tone, transparent);
+}
+
+.metric[data-tone='good'] {
+  --tone: #2e9e5b;
+}
+
+.metric[data-tone='warn'] {
+  --tone: #d9a400;
+}
+
+.metric[data-tone='bad'] {
+  --tone: #d64545;
+}
+
+.metricValue {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .metric {
+    grid-template-columns: 5rem 1fr 4.2rem;
+  }
+}
