@@ -9,6 +9,7 @@ import {
 } from './push-to-talk-machine';
 import {
   isEditableTarget,
+  isUsableRecording,
   MAX_RECORDING_MS,
   pickRecordingMimeType,
 } from './recording-format';
@@ -18,6 +19,8 @@ export interface UsePushToTalkOptions {
   onPressStart: () => void;
   /** A finished recording; `releasedAt` is `performance.now()` at the release. */
   onRecorded: (audio: Blob, releasedAt: number) => void;
+  /** The press was too short (or empty) to be a question; nothing was kept. */
+  onTooShort: () => void;
   onError: (message: string) => void;
 }
 
@@ -51,6 +54,7 @@ export function usePushToTalk(options: UsePushToTalkOptions): PushToTalk {
     undefined,
   );
   const discardRef = useRef(false);
+  const startedAtRef = useRef(0);
   const [isRecording, setIsRecording] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
 
@@ -93,14 +97,24 @@ export function usePushToTalk(options: UsePushToTalkOptions): PushToTalk {
     recorder.ondataavailable = (event) => chunksRef.current.push(event.data);
     recorder.onstop = () => {
       stream.getTracks().forEach((track) => track.stop());
-      if (!discardRef.current && chunksRef.current.length > 0) {
-        optionsRef.current.onRecorded(
-          new Blob(chunksRef.current, { type: mimeType }),
-          performance.now(),
-        );
+      if (discardRef.current) {
+        return;
+      }
+      const recording = new Blob(chunksRef.current, { type: mimeType });
+      const releasedAt = performance.now();
+      if (
+        isUsableRecording({
+          durationMs: releasedAt - startedAtRef.current,
+          bytes: recording.size,
+        })
+      ) {
+        optionsRef.current.onRecorded(recording, releasedAt);
+      } else {
+        optionsRef.current.onTooShort();
       }
     };
     recorder.start();
+    startedAtRef.current = performance.now();
     recorderRef.current = recorder;
     timeoutRef.current = setTimeout(
       () => dispatchRef.current('timeout'),

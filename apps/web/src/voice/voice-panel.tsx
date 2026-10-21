@@ -11,6 +11,7 @@ import styles from './voice.module.css';
 import { WaterfallPanel } from './waterfall-panel';
 
 const FALLBACK_ERROR = 'Hiba történt. Kérlek, próbáld újra.';
+const TOO_SHORT_NOTICE = 'Tartsd nyomva a gombot, amíg beszélsz.';
 
 export function VoicePanel({ escalatePrefix }: { escalatePrefix: string }) {
   const [state, dispatch] = useReducer(voiceReducer, initialVoiceState);
@@ -59,6 +60,7 @@ export function VoicePanel({ escalatePrefix }: { escalatePrefix: string }) {
       dispatch({ type: 'aborted' });
     },
     onError: setNotice,
+    onTooShort: () => setNotice(TOO_SHORT_NOTICE),
     onRecorded: (audio, releasedAt) => {
       releasedAtRef.current = releasedAt;
       const controller = session.begin();

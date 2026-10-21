@@ -1,5 +1,17 @@
 /** The client stops recording here; the server checks the same limit. */
 export const MAX_RECORDING_MS = 30_000;
+/** A shorter press is a tap, not a question: nothing is uploaded. */
+export const MIN_RECORDING_MS = 300;
+
+export function isUsableRecording({
+  durationMs,
+  bytes,
+}: {
+  durationMs: number;
+  bytes: number;
+}): boolean {
+  return bytes > 0 && durationMs >= MIN_RECORDING_MS;
+}
 
 // The server accepts webm and mp4; Firefox's default (ogg) is not on the
 // transcription model's list, so only these are ever requested.
