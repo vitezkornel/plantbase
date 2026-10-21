@@ -31,3 +31,16 @@ Következmények: az alapérték `tts-1`; a `gpt-4o-mini-tts` `VOICE_TTS_MODEL`-
 A latin nevek, a követő kérdés, a barge-in, az eszkaláció és a szöveges chat rendben volt.
 
 **Filler hiba (javítva).** A bemelegítés sikerült (mind az 5 filler kész), a `tool` esemény is megjött, de a `filler` esemény nem. Ok: a Next dev route-onként külön csomagol, ezért a `filler-cache` modulszintű `Map`-je két példány volt: a `/api/voice/warmup` töltötte, a `/api/voice` üres példányt olvasott. A cache most a `globalThis`-on él. Ellenőrzés a futó dev szerveren, valódi `/api/voice` fordulóval: a `filler` esemény a `tool` eseménnyel egy időben érkezik, a javítás előtt nem érkezett. A szerveroldali első token itt 3,1–3,9 s volt (a `runSql`-os kérdéseknél a két LLM-lépés miatt), ezt a filler hivatott áthidalni.
+
+## Hallgatási próba: magyar kiejtés (2026-10-21)
+
+Kézi, füllel végzett összevetés a `/voice` oldalon, ugyanazokkal a kérdésekkel, `coral` hanggal.
+
+| TTS-modell | Felhasználói értékelés | Megbízhatóság (lásd fent) |
+|---|---|---|
+| `tts-1` | elfogadható, de a magyar kiejtése gyengébb | 8/8, medián 1584 ms |
+| `gpt-4o-mini-tts-2025-03-20` | **sokkal jobb magyar kiejtés** | 8/8, medián 959 ms |
+
+Döntés: az alapérték a `gpt-4o-mini-tts-2025-03-20`; a snapshot kivezetésre jelölt, ezért ha az API a modellt nem elérhetőnek jelzi, az adott mondatot automatikusan `tts-1`-gyel generáljuk újra (`api_voice.tts_fallback {from, to}`).
+
+**Filler a javítás után.** A filler a `filler-cache` javítása (a cache a `globalThis`-on él) után szól: kézi próbán `runSql` és `searchKnowledge` kérdésnél is hallható volt, a tool-hívás pillanatában, a válasz előtt.
