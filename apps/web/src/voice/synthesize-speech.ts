@@ -9,6 +9,9 @@ import type { VoiceSpeechModel } from './voice-providers';
 //    parallel request is started and the first to finish wins;
 //  - a silent attempt is given up on after 5 s and sent again (the net).
 export const TTS_ATTEMPT_TIMEOUT_MS = 5_000;
+// Generation takes longer for longer text, and the timeout covers the whole
+// call (the body too), so a long sentence must not be taken for a silent one.
+const TTS_ATTEMPT_PER_CHAR_MS = 40;
 export const TTS_MAX_ATTEMPTS = 3;
 const HEDGED_MODEL_PREFIX = 'gpt-4o-mini-tts';
 const HEDGE_DELAY_MS = 2_000;
@@ -16,6 +19,11 @@ const HEDGE_DELAY_MS = 2_000;
 /** How long to wait before a parallel request; undefined = no hedging. */
 export function hedgeDelayFor(modelId: string): number | undefined {
   return modelId.startsWith(HEDGED_MODEL_PREFIX) ? HEDGE_DELAY_MS : undefined;
+}
+
+/** The silence timeout of one attempt for this text. */
+export function attemptTimeoutFor(text: string): number {
+  return TTS_ATTEMPT_TIMEOUT_MS + TTS_ATTEMPT_PER_CHAR_MS * text.length;
 }
 
 export interface SynthesizeSpeechInput {
@@ -37,7 +45,7 @@ export async function synthesizeSpeech({
   voice,
   text,
   signal,
-  attemptTimeoutMs = TTS_ATTEMPT_TIMEOUT_MS,
+  attemptTimeoutMs = attemptTimeoutFor(text),
   hedgeAfterMs = hedgeDelayFor(modelIdOf(model)),
 }: SynthesizeSpeechInput): Promise<Uint8Array> {
   const request = async (abortSignal: AbortSignal): Promise<Uint8Array> => {

@@ -1,6 +1,10 @@
 import { MockSpeechModelV2 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { hedgeDelayFor, synthesizeSpeech } from './synthesize-speech';
+import {
+  attemptTimeoutFor,
+  hedgeDelayFor,
+  synthesizeSpeech,
+} from './synthesize-speech';
 
 const AUDIO = new Uint8Array([1, 2, 3]);
 
@@ -143,5 +147,23 @@ describe('hedgeDelayFor', () => {
     expect(hedgeDelayFor('gpt-4o-mini-tts')).toBe(2000);
     expect(hedgeDelayFor('tts-1')).toBeUndefined();
     expect(hedgeDelayFor('tts-1-hd')).toBeUndefined();
+  });
+});
+
+describe('attemptTimeoutFor', () => {
+  it('should give a short sentence about the base silence timeout', () => {
+    expect(attemptTimeoutFor('Szia.')).toBeGreaterThanOrEqual(5000);
+    expect(attemptTimeoutFor('Szia.')).toBeLessThan(6000);
+  });
+
+  it('should wait longer for a long sentence than a slow short one takes', () => {
+    // tts-1-hd took up to 5.6 s for a 24-character sentence
+    expect(attemptTimeoutFor('x'.repeat(300))).toBeGreaterThan(15_000);
+  });
+
+  it('should grow with the length of the text', () => {
+    expect(attemptTimeoutFor('x'.repeat(600))).toBeGreaterThan(
+      attemptTimeoutFor('x'.repeat(300)),
+    );
   });
 });
