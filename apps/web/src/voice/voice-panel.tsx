@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createAudioQueue } from './audio-queue';
+import { createTurnSession } from './turn-session';
 import { usePushToTalk } from './use-push-to-talk';
 import { streamVoiceTurn } from './voice-client';
 import type { VoiceEvent } from './voice-events';
@@ -14,7 +15,6 @@ const FALLBACK_ERROR = 'Hiba történt. Kérlek, próbáld újra.';
 export function VoicePanel({ escalatePrefix }: { escalatePrefix: string }) {
   const [state, dispatch] = useReducer(voiceReducer, initialVoiceState);
   const [notice, setNotice] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const releasedAtRef = useRef(0);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -30,6 +30,12 @@ export function VoicePanel({ escalatePrefix }: { escalatePrefix: string }) {
       }),
     [],
   );
+
+  const session = useMemo(() => createTurnSession(queue), [queue]);
+
+  // Leaving the page (e.g. the link back to the text chat) ends the speech and
+  // the request in flight; the microphone is closed by usePushToTalk's own cleanup.
+  useEffect(() => () => session.interrupt(), [session]);
 
   // Warm the filler sentences in the background (best effort).
   useEffect(() => {
@@ -49,15 +55,13 @@ export function VoicePanel({ escalatePrefix }: { escalatePrefix: string }) {
     onPressStart: () => {
       // Barge-in: silence the speech and stop the request in flight.
       setNotice(null);
-      queue.stop();
-      abortRef.current?.abort();
+      session.interrupt();
       dispatch({ type: 'aborted' });
     },
     onError: setNotice,
     onRecorded: (audio, releasedAt) => {
       releasedAtRef.current = releasedAt;
-      const controller = new AbortController();
-      abortRef.current = controller;
+      const controller = session.begin();
       const history = historyFor(stateRef.current, escalatePrefix);
       dispatch({ type: 'turn-started' });
       streamVoiceTurn({
