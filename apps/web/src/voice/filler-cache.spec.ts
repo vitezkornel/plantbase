@@ -106,3 +106,28 @@ describe('filler cache', () => {
     ).toBeDefined();
   });
 });
+
+describe('filler cache across module instances', () => {
+  it('should be one cache even when the module is loaded twice (separate route bundles)', async () => {
+    vi.resetModules();
+    const warmer = await import('./filler-cache');
+    vi.resetModules();
+    const reader = await import('./filler-cache');
+    expect(reader).not.toBe(warmer); // really two instances
+
+    await warmer.warmFillers({
+      model: 'm',
+      voice: 'v',
+      synthesize: async () => new Uint8Array([7]),
+      onFailure: () => undefined,
+    });
+
+    expect(
+      reader.getFillerIfReady({
+        model: 'm',
+        voice: 'v',
+        text: ALL_FILLER_TEXTS[0] ?? '',
+      }),
+    ).toEqual(new Uint8Array([7]));
+  });
+});

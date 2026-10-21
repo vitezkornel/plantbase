@@ -20,3 +20,14 @@ Mérés a valódi OpenAI `/audio/speech` ellen, sima Node-ból (nyers `fetch`, N
 Korábbi, azonos módszerű futások (nem a fenti táblából): `gpt-4o-mini-tts` 3/8 és 4/8 sikeres; `gpt-4o-mini-tts-2025-12-15` 0/8 (mind néma); `tts-1` 8/8 (1,0–1,8 s); `GET /v1/models` 8/8 gyors, a hálózat tehát rendben volt. Ugyanaz a kérés `curl`-lel is ~50%-ban néma maradt (8-ból 4 kérés 12 s-ig), IPv4-first DNS-sel és új kapcsolatonként is. A hiba tehát az OpenAI oldalán van, nem a Node-on, a Next-en vagy az SDK-n.
 
 Következmények: az alapérték `tts-1`; a `gpt-4o-mini-tts` `VOICE_TTS_MODEL`-lel választható, és csak ahhoz tartozik hedging (2 s után egy párhuzamos kérés, az nyer, amelyik előbb végez); minden modellnél védőháló az 5 s-os néma-újrapróbálás (legfeljebb 3 kísérlet). A régi `gpt-4o-mini-tts-2025-03-20` snapshot ezen a napon a legjobb volt; a snapshotok idővel kivezetődhetnek, ezért nem az alapérték.
+
+## Kézi próba: `tts-1` (2026-10-21, bemelegítés után)
+
+| Kérdés | STT-átirat | Modell (STT / TTS / hang) | STT ms | Első token ms | Első hang ms | Összesen ms | Filler BE/KI | Megjegyzés |
+|---|---|---|---|---|---|---|---|---|
+| Milyen kaktuszaitok vannak? | jó | gpt-transcribe / tts-1 / coral | 696 | 3141 | 5068 | 8587 | KI | hiba nélkül, mind a 4 sáv kitöltődött; a filler nem szólt (lásd lent) |
+| Melyik növény bírja az árnyékot és macskabarát? | jó | gpt-transcribe / tts-1 / coral | – | – | – | – | KI | a válasz rendben; a filler nem szólt |
+
+A latin nevek, a követő kérdés, a barge-in, az eszkaláció és a szöveges chat rendben volt.
+
+**Filler hiba (javítva).** A bemelegítés sikerült (mind az 5 filler kész), a `tool` esemény is megjött, de a `filler` esemény nem. Ok: a Next dev route-onként külön csomagol, ezért a `filler-cache` modulszintű `Map`-je két példány volt: a `/api/voice/warmup` töltötte, a `/api/voice` üres példányt olvasott. A cache most a `globalThis`-on él. Ellenőrzés a futó dev szerveren, valódi `/api/voice` fordulóval: a `filler` esemény a `tool` eseménnyel egy időben érkezik, a javítás előtt nem érkezett. A szerveroldali első token itt 3,1–3,9 s volt (a `runSql`-os kérdéseknél a két LLM-lépés miatt), ezt a filler hivatott áthidalni.

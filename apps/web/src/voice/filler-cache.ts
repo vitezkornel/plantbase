@@ -16,7 +16,12 @@ interface FillerKey {
   text: string;
 }
 
-const entries = new Map<string, Entry>();
+// Next compiles every route into its own bundle, so a plain module-level
+// Map would be one cache per route (the warm-up route would fill a cache that
+// /api/voice never reads). The Map therefore lives on globalThis.
+const CACHE_KEY = Symbol.for('plantbase.voice.fillerCache');
+const globals = globalThis as { [CACHE_KEY]?: Map<string, Entry> };
+const entries: Map<string, Entry> = (globals[CACHE_KEY] ??= new Map());
 
 const keyOf = ({ model, voice, text }: FillerKey): string =>
   `${model}|${voice}|${text}`;
