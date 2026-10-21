@@ -1,7 +1,8 @@
 export const DEFAULT_STT_MODEL = 'gpt-transcribe';
-// tts-1: the reliable one. gpt-4o-mini-tts left about half of its requests
-// unanswered on 2026-10-21 (docs/voice-meresek.md); it stays selectable.
-export const DEFAULT_TTS_MODEL = 'tts-1';
+// The snapshot with the best Hungarian pronunciation and no silent requests
+// (docs/voice-meresek.md). It is marked for retirement, so voice-providers
+// adds tts-1 as an automatic fallback (tts-fallback.ts).
+export const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts-2025-03-20';
 export const DEFAULT_TTS_VOICE = 'coral';
 
 export const NOT_CONFIGURED_MESSAGE =

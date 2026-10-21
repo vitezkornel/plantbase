@@ -4,6 +4,7 @@ import type {
   experimental_transcribe as transcribe,
   LanguageModel,
 } from 'ai';
+import { FALLBACK_TTS_MODEL } from './tts-fallback';
 import { createTranscriptionFetch } from './transcription-fetch';
 import { VoiceNotConfiguredError, type VoiceConfig } from './voice-config';
 
@@ -14,6 +15,8 @@ export interface VoiceDeps {
   config: VoiceConfig;
   transcriptionModel: VoiceTranscriptionModel;
   speechModel: VoiceSpeechModel;
+  /** Used for a sentence when the speech model is retired (tts-fallback.ts). */
+  fallbackSpeechModel?: VoiceSpeechModel;
   /** Test seam: replaces the real ask-agent model. */
   askModel?: LanguageModel;
 }
@@ -31,5 +34,8 @@ export function createVoiceDeps(config: VoiceConfig): VoiceDeps {
     config,
     transcriptionModel: openai.transcription(config.sttModel),
     speechModel: openai.speech(config.ttsModel),
+    ...(config.ttsModel === FALLBACK_TTS_MODEL
+      ? {}
+      : { fallbackSpeechModel: openai.speech(FALLBACK_TTS_MODEL) }),
   };
 }

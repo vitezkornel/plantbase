@@ -2,7 +2,7 @@ import 'server-only';
 import { logger } from 'core';
 import { warmFillers } from '../../../../voice/filler-cache';
 import { safeErrorFields } from '../../../../voice/safe-error-fields';
-import { synthesizeSpeech } from '../../../../voice/synthesize-speech';
+import { synthesizeWithFallback } from '../../../../voice/tts-fallback';
 import {
   NOT_CONFIGURED_MESSAGE,
   readVoiceConfig,
@@ -29,12 +29,7 @@ export function POST(): Response {
     model: deps.config.ttsModel,
     voice: deps.config.voice,
     synthesize: (text) =>
-      synthesizeSpeech({
-        model: deps.speechModel,
-        voice: deps.config.voice,
-        text,
-        signal: idle,
-      }),
+      synthesizeWithFallback({ deps, text, signal: idle }),
     onFailure: (error) =>
       logger.warn('api_voice.filler_warm_failed', safeErrorFields(error)),
   });

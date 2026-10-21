@@ -13,7 +13,7 @@ import {
   stripMarkdown,
 } from './spoken-text';
 import { createSpeechQueue } from './speech-queue';
-import { synthesizeSpeech } from './synthesize-speech';
+import { synthesizeWithFallback } from './tts-fallback';
 import { transcribeAudio } from './transcribe-audio';
 import type { VoiceEvent } from './voice-events';
 import type { VoiceDeps } from './voice-providers';
@@ -74,12 +74,7 @@ export async function runVoiceTurn({
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
   const synthesize = (text: string): Promise<Uint8Array> =>
-    synthesizeSpeech({
-      model: deps.speechModel,
-      voice: config.voice,
-      text,
-      signal,
-    });
+    synthesizeWithFallback({ deps, text, signal });
 
   const queue = createSpeechQueue({
     synthesize,
