@@ -24,7 +24,7 @@ Sikeres, ha:
 |---|---|
 | Beszélgetés | Többfordulós: a kliens a szöveges átiratokat és válaszokat memóriában tartja, és előzményként elküldi. |
 | STT | `gpt-transcribe`, tartalék `gpt-4o-transcribe`; felülírható: `VOICE_STT_MODEL`. |
-| TTS | `gpt-4o-mini-tts`, hang alapértéke `coral`; felülírható: `VOICE_TTS_MODEL`, `VOICE_TTS_VOICE`. |
+| TTS | `tts-1`, hang alapértéke `coral`; felülírható: `VOICE_TTS_MODEL` (a `gpt-4o-mini-tts` választható, hedginggel), `VOICE_TTS_VOICE`. Az indok a 4. fejezet 7. pontjában. |
 | Provider | Vercel AI SDK: `experimental_transcribe`, `experimental_generateSpeech`; a provider egy sorral cserélhető. |
 | Szállítás | Egy `POST /api/voice`, NDJSON-folyam válasszal. |
 | Filler | Memória-cache, oldalbetöltéskor előmelegítve, kulcsa `modell\|hang\|szöveg`; nem kész filler kimarad. |
@@ -52,6 +52,7 @@ Forrás: a telepített csomagok kódja, context7, `developers.openai.com`. Nem e
 4. **Hangformátumok.** `gpt-transcribe`: mp3, mp4, mpeg, mpga, m4a, wav, webm; legfeljebb 25 MB; **ogg nincs a listán**. A kliens `MediaRecorder.isTypeSupported` sorrendje: `audio/webm;codecs=opus`, majd `audio/mp4`. Ha egyik sem támogatott, a gomb tiltott, és magyar üzenet jelzi.
 5. **Az `streamAskAgent` rendszerpromptja fix**, ezért a `<voice>` szekcióhoz a core-ba egy nem törő opció kell (5.1).
 6. A gyökér `.env.example`-ben nincs OpenAI-sor.
+7. **Ismert kockázat: `gpt-4o-mini-tts` ~50% néma kérés (2026-10-21).** A modell a kérések nagyjából felét elfogadja, majd nem válaszol (sima Node-ból és `curl`-lel is reprodukálható; `tts-1` és a `gpt-4o-mini-tts-2025-03-20` snapshot nem érintett). Mérések: [`docs/voice-meresek.md`](../../voice-meresek.md). Kezelés: alapérték `tts-1`; a `gpt-4o-mini-tts`-hez hedging (2 s után egy párhuzamos kérés, az nyer, amelyik előbb végez); minden modellnél 5 s-os néma-újrapróbálás (legfeljebb 3 kísérlet); egy elbukott mondat kimarad (`speech-failed`), a forduló nem.
 
 ## 5. Architektúra
 
