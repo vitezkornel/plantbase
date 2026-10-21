@@ -126,6 +126,7 @@ describe('runVoiceTurn', () => {
 
     expect(types(events)).toEqual([
       'transcript',
+      'first-token',
       'text-delta',
       'text-delta',
       'sentence',
@@ -278,5 +279,44 @@ describe('runVoiceTurn', () => {
     const [timing] = ofType(events, 'timing');
     expect(timing?.firstTokenMs).not.toBeNull();
     expect(timing?.firstSentenceMs).not.toBeNull();
+  });
+
+  it('should report the first token as its own event, before the sentences', async () => {
+    agentStreaming(ofParts(text('Szia. '), text('Hogy vagy?'), finish));
+
+    const events = await runTurn(makeDeps());
+
+    expect(types(events).indexOf('first-token')).toBeGreaterThan(-1);
+    expect(types(events).indexOf('first-token')).toBeLessThan(
+      types(events).indexOf('sentence'),
+    );
+    expect(ofType(events, 'first-token')).toHaveLength(1);
+  });
+
+  it('should keep the turn alive when one sentence cannot be spoken', async () => {
+    agentStreaming(
+      ofParts(text('Első. '), text('Rossz mondat. '), text('Harmadik.'), finish),
+    );
+    const deps = makeDeps();
+    deps.speechModel = new MockSpeechModelV2({
+      doGenerate: async ({ text: spoken }) => {
+        if (spoken.startsWith('Rossz')) {
+          throw Object.assign(new Error('TITKOS'), { name: 'AI_APICallError' });
+        }
+        return {
+          audio: new Uint8Array([1]),
+          warnings: [],
+          response: { timestamp: new Date(), modelId: 'mock', headers: {} },
+        };
+      },
+    });
+
+    const events = await runTurn(deps);
+
+    expect(ofType(events, 'sentence').map((s) => s.index)).toEqual([0, 2]);
+    expect(ofType(events, 'speech-failed')).toEqual([
+      { type: 'speech-failed', index: 1 },
+    ]);
+    expect(types(events).slice(-2)).toEqual(['timing', 'done']);
   });
 });

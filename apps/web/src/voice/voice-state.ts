@@ -11,12 +11,20 @@ export type TurnStatus =
   | 'error'
   | 'aborted';
 
+/** Filled step by step as the events arrive; null = not reached yet. */
 export interface ServerTiming {
-  sttMs: number;
+  sttMs: number | null;
   firstTokenMs: number | null;
   firstSentenceMs: number | null;
-  totalMs: number;
+  totalMs: number | null;
 }
+
+const noTiming: ServerTiming = {
+  sttMs: null,
+  firstTokenMs: null,
+  firstSentenceMs: null,
+  totalMs: null,
+};
 
 export interface VoiceTurn {
   id: number;
@@ -26,6 +34,8 @@ export interface VoiceTurn {
   text: string;
   tools: string[];
   isEscalated: boolean;
+  /** Sentences of the answer that could not be read aloud. */
+  failedSentences: number;
   server: ServerTiming | null;
   /** Release of the button → first audible output (client-side). */
   firstSoundMs: number | null;
@@ -63,6 +73,7 @@ export function voiceReducer(
       text: '',
       tools: [],
       isEscalated: false,
+      failedSentences: 0,
       server: null,
       firstSoundMs: null,
       error: null,
@@ -96,7 +107,19 @@ function reduceTurn(turn: VoiceTurn, action: VoiceAction): VoiceTurn {
 function reduceEvent(turn: VoiceTurn, event: VoiceEvent): VoiceTurn {
   switch (event.type) {
     case 'transcript':
-      return { ...turn, transcript: event.text, status: 'answering' };
+      return {
+        ...turn,
+        transcript: event.text,
+        status: 'answering',
+        server: { ...(turn.server ?? noTiming), sttMs: event.sttMs },
+      };
+    case 'first-token':
+      return {
+        ...turn,
+        server: { ...(turn.server ?? noTiming), firstTokenMs: event.ms },
+      };
+    case 'speech-failed':
+      return { ...turn, failedSentences: turn.failedSentences + 1 };
     case 'tool':
       return { ...turn, tools: [...turn.tools, event.name] };
     case 'text-delta':

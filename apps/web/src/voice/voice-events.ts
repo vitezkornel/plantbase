@@ -13,6 +13,8 @@ export type VoiceEvent =
       audio: string;
       ttsMs: number;
     }
+  | { type: 'first-token'; ms: number }
+  | { type: 'speech-failed'; index: number }
   | { type: 'escalated' }
   | {
       type: 'timing';
@@ -30,6 +32,8 @@ const EVENT_TYPES: ReadonlySet<string> = new Set([
   'filler',
   'text-delta',
   'sentence',
+  'first-token',
+  'speech-failed',
   'escalated',
   'timing',
   'done',

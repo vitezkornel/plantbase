@@ -82,7 +82,9 @@ describe('createSpeechQueue', () => {
     expect(emitted[0]?.ttsMs).toBe(42);
   });
 
-  it('should reject finish() when a synthesis fails, without unhandled rejections', async () => {
+  it('should skip a failed sentence, report it, and still hand on the others in order', async () => {
+    const emitted: number[] = [];
+    const failed: Array<{ index: number; message: string }> = [];
     const queue = createSpeechQueue({
       synthesize: async (text) => {
         if (text === 'rossz') {
@@ -90,13 +92,32 @@ describe('createSpeechQueue', () => {
         }
         return new Uint8Array([1]);
       },
-      onSentence: () => undefined,
+      onSentence: (sentence) => {
+        emitted.push(sentence.index);
+      },
+      onFailure: (index, error) =>
+        failed.push({ index, message: (error as Error).message }),
     });
 
     queue.enqueue('jó');
     queue.enqueue('rossz');
     queue.enqueue('utána');
+    await queue.finish();
 
-    await expect(queue.finish()).rejects.toThrow('tts down');
+    expect(emitted).toEqual([0, 2]);
+    expect(failed).toEqual([{ index: 1, message: 'tts down' }]);
+  });
+
+  it('should still reject finish() when handing a sentence on throws', async () => {
+    const queue = createSpeechQueue({
+      synthesize: async () => new Uint8Array([1]),
+      onSentence: () => {
+        throw new Error('client gone');
+      },
+    });
+
+    queue.enqueue('jó');
+
+    await expect(queue.finish()).rejects.toThrow('client gone');
   });
 });

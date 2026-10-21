@@ -67,6 +67,40 @@ describe('voiceReducer', () => {
     expect(turn?.status).toBe('done');
   });
 
+  it('should fill the server timings step by step, before the turn ends', () => {
+    const afterStt = lastTurn(
+      run(started, event({ type: 'transcript', text: 'x', sttMs: 900 })),
+    );
+    const afterToken = lastTurn(
+      run(
+        started,
+        event({ type: 'transcript', text: 'x', sttMs: 900 }),
+        event({ type: 'first-token', ms: 3900 }),
+      ),
+    );
+
+    expect(afterStt?.server).toEqual({
+      sttMs: 900,
+      firstTokenMs: null,
+      firstSentenceMs: null,
+      totalMs: null,
+    });
+    expect(afterToken?.server).toMatchObject({ sttMs: 900, firstTokenMs: 3900 });
+    expect(afterToken?.server?.totalMs).toBeNull();
+  });
+
+  it('should count the sentences that could not be spoken', () => {
+    const turn = lastTurn(
+      run(
+        started,
+        event({ type: 'speech-failed', index: 1 }),
+        event({ type: 'speech-failed', index: 3 }),
+      ),
+    );
+
+    expect(turn?.failedSentences).toBe(2);
+  });
+
   it('should record the first sound only once', () => {
     const turn = lastTurn(
       run(

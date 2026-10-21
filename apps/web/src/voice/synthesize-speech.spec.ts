@@ -1,6 +1,6 @@
 import { MockSpeechModelV2 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import { synthesizeSpeech } from './synthesize-speech';
+import { hedgeDelayFor, synthesizeSpeech } from './synthesize-speech';
 
 const AUDIO = new Uint8Array([1, 2, 3]);
 
@@ -11,9 +11,11 @@ type DoGenerate = NonNullable<
 /** A model whose n-th call is `behaviours[n]`: 'hang' waits for the abort. */
 function scriptedModel(behaviours: Array<'hang' | 'ok' | 'fail'>) {
   let calls = 0;
+  const signals: Array<AbortSignal | undefined> = [];
   const doGenerate: DoGenerate = async ({ abortSignal }) => {
     const behaviour = behaviours[calls] ?? 'ok';
     calls += 1;
+    signals.push(abortSignal);
     if (behaviour === 'fail') {
       throw Object.assign(new Error('boom'), { name: 'AI_APICallError' });
     }
@@ -30,7 +32,11 @@ function scriptedModel(behaviours: Array<'hang' | 'ok' | 'fail'>) {
       response: { timestamp: new Date(), modelId: 'mock', headers: {} },
     };
   };
-  return { model: new MockSpeechModelV2({ doGenerate }), calls: () => calls };
+  return {
+    model: new MockSpeechModelV2({ doGenerate }),
+    calls: () => calls,
+    signals,
+  };
 }
 
 const input = (model: MockSpeechModelV2, signal = new AbortController().signal) => ({
@@ -83,5 +89,59 @@ describe('synthesizeSpeech', () => {
 
     await expect(pending).rejects.toThrow();
     expect(calls()).toBe(1);
+  });
+
+  describe('hedging', () => {
+    const hedged = (model: MockSpeechModelV2) => ({
+      ...input(model),
+      attemptTimeoutMs: 1000,
+      hedgeAfterMs: 20,
+    });
+
+    it('should start one parallel request when the first stays silent, and let it win', async () => {
+      const { model, calls, signals } = scriptedModel(['hang', 'ok']);
+
+      const startedAt = performance.now();
+      await expect(synthesizeSpeech(hedged(model))).resolves.toEqual(AUDIO);
+
+      expect(performance.now() - startedAt).toBeLessThan(500); // not the 1 s timeout
+      expect(calls()).toBe(2);
+      expect(signals[0]?.aborted).toBe(true); // the loser is cancelled
+    });
+
+    it('should not start a second request when the first answers in time', async () => {
+      const { model, calls } = scriptedModel(['ok']);
+
+      await synthesizeSpeech({ ...hedged(model), hedgeAfterMs: 200 });
+
+      expect(calls()).toBe(1);
+    });
+
+    it('should start at most one extra request per attempt', async () => {
+      const { model, calls } = scriptedModel(Array(6).fill('hang'));
+
+      await expect(
+        synthesizeSpeech({ ...hedged(model), attemptTimeoutMs: 80 }),
+      ).rejects.toMatchObject({ name: 'TimeoutError' });
+
+      expect(calls()).toBe(6); // 3 attempts x (1 + 1 extra)
+    });
+
+    it('should fail at once when the first request is refused before the delay', async () => {
+      const { model, calls } = scriptedModel(['fail', 'ok']);
+
+      await expect(
+        synthesizeSpeech({ ...hedged(model), hedgeAfterMs: 200 }),
+      ).rejects.toMatchObject({ name: 'AI_APICallError' });
+      expect(calls()).toBe(1);
+    });
+  });
+});
+
+describe('hedgeDelayFor', () => {
+  it('should hedge only the gpt-4o-mini-tts models', () => {
+    expect(hedgeDelayFor('gpt-4o-mini-tts')).toBe(2000);
+    expect(hedgeDelayFor('tts-1')).toBeUndefined();
+    expect(hedgeDelayFor('tts-1-hd')).toBeUndefined();
   });
 });

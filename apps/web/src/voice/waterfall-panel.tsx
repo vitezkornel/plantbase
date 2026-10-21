@@ -61,6 +61,12 @@ export function WaterfallPanel({ turn }: { turn: VoiceTurn }) {
         <p className={styles.escalated}>Kollégának továbbítva</p>
       )}
       {turn.text !== '' && <p className={styles.answer}>{turn.text}</p>}
+      {turn.failedSentences > 0 && (
+        <p className={styles.tools}>
+          {turn.failedSentences} mondatot nem sikerült felolvasni (a szöveg
+          fent olvasható).
+        </p>
+      )}
       {turn.error !== null && (
         <p role="alert" className={styles.error}>
           {turn.error}

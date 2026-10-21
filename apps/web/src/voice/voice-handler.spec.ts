@@ -128,6 +128,7 @@ describe('POST /api/voice (handler)', () => {
     const events = await eventsOf(response);
     expect(events.map((e) => e.type)).toEqual([
       'transcript',
+      'first-token',
       'text-delta',
       'sentence',
       'timing',
@@ -178,11 +179,39 @@ describe('POST /api/voice (handler)', () => {
     });
   });
 
-  it('should send an error event and log only name and status when the TTS fails', async () => {
+  it('should finish the turn and log only name and status when the TTS fails', async () => {
     agentSaying('Valami.');
 
     const response = await handleVoiceRequest(post({ audio: webm() }), () =>
       deps({ speechFails: true }),
+    );
+    const events = await eventsOf(response);
+
+    expect(events.map((e) => e.type)).toContain('speech-failed');
+    expect(events.at(-1)?.type).toBe('done');
+    expect(events.some((e) => e.type === 'error')).toBe(false);
+    const all = logged.join('');
+    expect(all).toContain('api_voice.tts_failed');
+    expect(all).toContain('AI_APICallError');
+    expect(all).not.toContain(SECRET_TEXT);
+  });
+
+  it('should send an error event and log only name and status when the agent fails', async () => {
+    async function* parts() {
+      yield {
+        type: 'error' as const,
+        error: Object.assign(new Error(`model failed for ${SECRET_TEXT}`), {
+          name: 'AI_APICallError',
+          statusCode: 529,
+        }),
+      };
+    }
+    vi.mocked(streamAskAgent).mockReturnValue({
+      fullStream: parts(),
+    } as unknown as ReturnType<typeof streamAskAgent>);
+
+    const response = await handleVoiceRequest(post({ audio: webm() }), () =>
+      deps(),
     );
     const events = await eventsOf(response);
 
@@ -191,7 +220,7 @@ describe('POST /api/voice (handler)', () => {
     );
     const all = logged.join('');
     expect(all).toContain('api_voice.failed');
-    expect(all).toContain('AI_APICallError');
+    expect(all).toContain('529');
     expect(all).not.toContain(SECRET_TEXT);
   });
 

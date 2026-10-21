@@ -6,7 +6,7 @@ describe('readVoiceConfig', () => {
     expect(readVoiceConfig({})).toEqual({
       apiKey: undefined,
       sttModel: 'gpt-transcribe',
-      ttsModel: 'gpt-4o-mini-tts',
+      ttsModel: 'tts-1',
       voice: 'coral',
     });
   });
@@ -15,14 +15,14 @@ describe('readVoiceConfig', () => {
     const config = readVoiceConfig({
       OPENAI_API_KEY: 'sk-test',
       VOICE_STT_MODEL: 'gpt-4o-mini-transcribe',
-      VOICE_TTS_MODEL: 'tts-1',
+      VOICE_TTS_MODEL: 'gpt-4o-mini-tts',
       VOICE_TTS_VOICE: 'alloy',
     });
 
     expect(config).toEqual({
       apiKey: 'sk-test',
       sttModel: 'gpt-4o-mini-transcribe',
-      ttsModel: 'tts-1',
+      ttsModel: 'gpt-4o-mini-tts',
       voice: 'alloy',
     });
   });

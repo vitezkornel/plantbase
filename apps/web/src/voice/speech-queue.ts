@@ -12,19 +12,22 @@ export interface SpokenSentence {
 export interface SpeechQueueOptions {
   synthesize: (text: string) => Promise<Uint8Array>;
   onSentence: (sentence: SpokenSentence) => void | Promise<void>;
+  /** A sentence that could not be synthesized is skipped and reported here. */
+  onFailure?: (index: number, error: unknown) => void;
   concurrency?: number;
   now?: () => number;
 }
 
 export interface SpeechQueue {
   enqueue(text: string): void;
-  /** Resolves once every enqueued sentence has been handed on; rejects on the first failure. */
+  /** Resolves once every enqueued sentence has been handed on (or skipped); rejects only if handing one on throws. */
   finish(): Promise<void>;
 }
 
 export function createSpeechQueue({
   synthesize,
   onSentence,
+  onFailure,
   concurrency = 2,
   now = () => performance.now(),
 }: SpeechQueueOptions): SpeechQueue {
@@ -64,11 +67,17 @@ export function createSpeechQueue({
           release();
         }
       })();
-      synthesis.catch(() => undefined); // surfaced through `chain`
+      synthesis.catch(() => undefined); // handled in `chain`
 
       chain = chain.then(async () => {
-        const { audio, ttsMs } = await synthesis;
-        await onSentence({ index, text, audio, ttsMs });
+        let spoken: Awaited<typeof synthesis>;
+        try {
+          spoken = await synthesis;
+        } catch (error: unknown) {
+          onFailure?.(index, error); // one lost sentence must not lose the turn
+          return;
+        }
+        await onSentence({ index, text, ...spoken });
       });
       chain.catch(() => undefined); // surfaced through finish()
     },

@@ -10,6 +10,7 @@ const base: VoiceTurn = {
   text: 'Van néhány.',
   tools: ['runSql'],
   isEscalated: false,
+  failedSentences: 0,
   server: {
     sttMs: 500,
     firstTokenMs: 1200,
@@ -69,5 +70,26 @@ describe('WaterfallPanel', () => {
     });
 
     expect(markup).toMatch(/role="alert"[^>]*>[^<]*Nem hallottam semmit/);
+  });
+});
+
+describe('WaterfallPanel (partial turn)', () => {
+  it('should show the steps reached so far and dashes for the rest', () => {
+    const markup = html({
+      ...base,
+      status: 'answering',
+      server: { sttMs: 900, firstTokenMs: 3900, firstSentenceMs: null, totalMs: null },
+      firstSoundMs: null,
+    });
+
+    expect(markup).toContain('900 ms');
+    expect(markup).toContain('3900 ms');
+    expect(markup).toContain('—');
+  });
+
+  it('should say how many sentences could not be read aloud', () => {
+    expect(html({ ...base, failedSentences: 2 })).toContain(
+      '2 mondatot nem sikerült felolvasni',
+    );
   });
 });

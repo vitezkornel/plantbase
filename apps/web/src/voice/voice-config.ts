@@ -1,5 +1,7 @@
 export const DEFAULT_STT_MODEL = 'gpt-transcribe';
-export const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
+// tts-1: the reliable one. gpt-4o-mini-tts left about half of its requests
+// unanswered on 2026-10-21 (docs/voice-meresek.md); it stays selectable.
+export const DEFAULT_TTS_MODEL = 'tts-1';
 export const DEFAULT_TTS_VOICE = 'coral';
 
 export const NOT_CONFIGURED_MESSAGE =

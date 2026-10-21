@@ -5,6 +5,7 @@
 import { ESCALATE_PREFIX, logger, streamAskAgent } from 'core';
 import { splitEscalation } from '../chat/escalation';
 import { getFillerIfReady } from './filler-cache';
+import { safeErrorFields } from './safe-error-fields';
 import { fillerTextForTool, STILL_SEARCHING_TEXT } from './filler-texts';
 import {
   createSentenceSplitter,
@@ -95,6 +96,13 @@ export async function runVoiceTurn({
         ttsMs: sentence.ttsMs,
       });
     },
+    onFailure: (index, error) => {
+      if (signal.aborted) {
+        return; // the barge-in cancelled it; not a failure
+      }
+      logger.warn('api_voice.tts_failed', { index, ...safeErrorFields(error) });
+      emit({ type: 'speech-failed', index });
+    },
     now,
   });
 
@@ -146,6 +154,7 @@ export async function runVoiceTurn({
         if (firstTokenMs === null) {
           firstTokenMs = elapsed();
           logger.info('api_voice.first_token', { firstTokenMs });
+          emit({ type: 'first-token', ms: firstTokenMs });
         }
         rawText += part.text;
         const view = splitEscalation(rawText, ESCALATE_PREFIX);
@@ -168,6 +177,7 @@ export async function runVoiceTurn({
     signal.throwIfAborted();
     splitter.flush().forEach(speak);
     await queue.finish();
+    signal.throwIfAborted(); // sentences cancelled by a barge-in are not failures
   } finally {
     clearTimeout(refreshTimer);
   }
