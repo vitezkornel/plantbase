@@ -47,11 +47,11 @@
 
 ## Tudásbázis
 
-| Fogalom                | Kód              | DB                 | Jelentés / megengedett értékek                  |
-| ---------------------- | ---------------- | ------------------ | ----------------------------------------------- |
-| Tudásbázis-cikkrészlet | `KnowledgeChunk` | `knowledge_chunks` | Növénygondozási cikk egy szakasza.              |
-| Cikk címe              | `title`          | `title`            | A válaszban forrásként idézendő.                |
-| Forrás                 | `source`         | `source`           | A cikk URL-je; a válaszban forrásként idézendő. |
+| Fogalom                | Kód              | DB                 | Jelentés / megengedett értékek                                                                                                      |
+| ---------------------- | ---------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Tudásbázis-cikkrészlet | `KnowledgeChunk` | `knowledge_chunks` | Növénygondozási cikk egy szakasza.                                                                                                  |
+| Cikk címe              | `title`          | `title`            | A válaszban forrásként idézendő.                                                                                                    |
+| Forrás                 | `source`         | `source`           | A cikk URL-je. Írásos válaszban a cím és az URL is idézendő; felolvasott (voice) válaszban az URL nem hangzik el, a cikk címe igen. |
 
 ## Eszkaláció
 
