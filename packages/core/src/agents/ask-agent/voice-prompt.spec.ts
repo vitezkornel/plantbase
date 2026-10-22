@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VOICE_PROMPT_SECTION } from './voice-prompt';
+import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
 
 describe('VOICE_PROMPT_SECTION', () => {
   it('should ask for the title of the source article to be spoken', () => {
