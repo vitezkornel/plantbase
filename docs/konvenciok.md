@@ -33,6 +33,7 @@
   ```ts
   const Input = z.object({ text: z.string().min(1) });
   ```
+  - Kivétel: a saját szerver → saját kliens NDJSON-eseményeknél (`/api/voice`) elég a típusőr (`isVoiceEvent`), nem kell Zod: mindkét oldal ugyanazt a típust használja, és nem külső input.
 
 ## Tesztelés
 
