@@ -42,6 +42,18 @@ export interface SqlCallLogEntry {
   result: ToolOutcome;
 }
 
+export type InteractionMode = 'text' | 'voice' | 'voice-live';
+
+/**
+ * What the client believed the user said — an approximation only (e.g. the
+ * realtime model's side transcription). Logged for analysis, never fed to a
+ * model.
+ */
+export interface ClientTranscript {
+  text: string;
+  approximate: true;
+}
+
 export interface InteractionLogEntry {
   timestamp: string;
   system: string;
@@ -58,6 +70,10 @@ export interface InteractionLogEntry {
   outcome?: InteractionOutcome;
   /** The error message, when `outcome` is `'error'`. */
   error?: string;
+  /** Which prompt variant ran (set by the streaming ask-agent). */
+  mode?: InteractionMode;
+  /** Set for voice-live: the client's approximate transcript of the user. */
+  clientTranscript?: ClientTranscript;
 }
 
 export type InteractionOutcome = 'ok' | 'error' | 'aborted';

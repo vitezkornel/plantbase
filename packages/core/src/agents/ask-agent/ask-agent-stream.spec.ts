@@ -422,3 +422,71 @@ describe('streamAskAgent mode', () => {
     expect(entry.system).toBe(ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION);
   });
 });
+
+describe('streamAskAgent voice-live mode', () => {
+  async function runWith(options: {
+    mode?: 'text' | 'voice' | 'voice-live';
+    clientTranscript?: string;
+  }) {
+    const model = makeModel('Szia!');
+    let resolveLogPath: (path: string) => void = () => undefined;
+    const logPathPromise = new Promise<string>((resolve) => {
+      resolveLogPath = resolve;
+    });
+    const result = streamAskAgent(question, {
+      model,
+      ...options,
+      onLogWritten: resolveLogPath,
+    });
+    await result.text;
+    const logPath = await logPathPromise;
+    const entry = JSON.parse((await readFile(logPath, 'utf-8')).trim());
+    await rm(logPath, { force: true });
+    return { model, entry };
+  }
+
+  it('should send the shared prompt plus the voice section in voice-live mode', async () => {
+    const { model } = await runWith({ mode: 'voice-live' });
+
+    const first = model.doStreamCalls[0]?.prompt[0];
+    expect(first?.role === 'system' ? first.content : '').toBe(
+      ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION,
+    );
+  });
+
+  it('should log the mode', async () => {
+    expect((await runWith({ mode: 'voice-live' })).entry.mode).toBe(
+      'voice-live',
+    );
+    expect((await runWith({})).entry.mode).toBe('text');
+  });
+
+  it('should log the client transcript marked as approximate', async () => {
+    const { entry } = await runWith({
+      mode: 'voice-live',
+      clientTranscript: 'és az pet szejf',
+    });
+
+    expect(entry.clientTranscript).toEqual({
+      text: 'és az pet szejf',
+      approximate: true,
+    });
+  });
+
+  it('should leave the client transcript out when none was given', async () => {
+    const { entry } = await runWith({ mode: 'voice-live' });
+
+    expect(entry).not.toHaveProperty('clientTranscript');
+  });
+
+  it('should never put the client transcript into the model prompt', async () => {
+    const { model } = await runWith({
+      mode: 'voice-live',
+      clientTranscript: 'TITKOS-ATIRAT',
+    });
+
+    expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).not.toContain(
+      'TITKOS-ATIRAT',
+    );
+  });
+});
