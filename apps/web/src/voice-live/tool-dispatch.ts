@@ -116,10 +116,24 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
     deps.send({ type: 'response.create' });
   };
 
+  // A call that fails before any request starts still has to be settled, or
+  // the session would believe a tool call is pending.
+  const failImmediately = (call: FunctionCall): void => {
+    respondWithError(call.callId);
+    deps.onSettled({
+      callId: call.callId,
+      name: call.name,
+      outcome: 'failed',
+      ms: 0,
+      escalated: false,
+      demo: false,
+    });
+  };
+
   const handleAsk = (call: FunctionCall): void => {
     const question = parseQuestion(call.rawArguments);
     if (question === null) {
-      respondWithError(call.callId);
+      failImmediately(call);
       return;
     }
     const controller = new AbortController();
@@ -152,7 +166,7 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
 
   const handleOrder = (call: FunctionCall): void => {
     if (!deps.demoOrders) {
-      respondWithError(call.callId);
+      failImmediately(call);
       return;
     }
     const timer = setTimeout(() => {
@@ -182,7 +196,7 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
       } else if (call.name === GET_ORDER_STATUS_TOOL_NAME) {
         handleOrder(call);
       } else {
-        respondWithError(call.callId);
+        failImmediately(call);
       }
     },
     interrupt: () => {

@@ -59,6 +59,10 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   let responding = false;
   let toolPending = false;
   let lastUserTranscript: string | undefined;
+  // A tool result's response.create that arrived while a response was still
+  // active: the API refuses a second concurrent response, so it waits for
+  // response.done (and is dropped if the user starts talking first).
+  let responseHeld = false;
 
   const log = (
     kind: Extract<LiveAction, { type: 'log' }>['kind'],
@@ -81,6 +85,9 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
 
   const nudge = createProgressNudge({
     onNudge: () => {
+      if (responding) {
+        return; // a concurrent response.create would be refused
+      }
       log('filler', 'Progresszív frissítés kérve (5 s)');
       deps.send({
         type: 'response.create',
@@ -114,7 +121,13 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   const dispatcher = createToolDispatcher({
     fetchSupervisor: (question, signal) =>
       deps.fetchSupervisor(question, signal, lastUserTranscript),
-    send: deps.send,
+    send: (event) => {
+      if (responding && 'type' in event && event.type === 'response.create') {
+        responseHeld = true;
+        return;
+      }
+      deps.send(event);
+    },
     demoOrders: deps.demoOrders,
     now,
     onSettled,
@@ -141,6 +154,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
           responding ? 'Közbevágás (barge-in)' : 'Beszéd kezdete',
         );
         meter.speechStarted();
+        responseHeld = false;
         idle.touch();
         nudge.cancel();
         dispatcher.interrupt();
@@ -155,6 +169,10 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         return;
       case 'response.done':
         responding = false;
+        if (responseHeld) {
+          responseHeld = false;
+          deps.send({ type: 'response.create' });
+        }
         return;
       case 'conversation.item.truncated':
         log('truncated', 'Az előzmény levágva (truncation)');

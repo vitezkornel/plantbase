@@ -308,3 +308,81 @@ describe('createLiveSession', () => {
     h.session.dispose();
   });
 });
+
+describe('createLiveSession — failed tool calls and active responses', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const instructionNudges = (sent: object[]) =>
+    sent.filter(
+      (e) =>
+        (e as { type: string; response?: unknown }).type ===
+          'response.create' &&
+        (e as { response?: unknown }).response !== undefined,
+    );
+
+  it('should not nudge or call later speech a filler after malformed tool arguments', () => {
+    const h = setup({ filler: true });
+    h.session.onEvent({
+      type: 'response.function_call_arguments.done',
+      call_id: 'c1',
+      name: 'askPlantbase',
+      arguments: 'not json',
+    });
+
+    vi.advanceTimersByTime(NUDGE_DELAY_MS * 3);
+    h.session.onEvent({
+      type: 'response.output_audio_transcript.done',
+      transcript: 'Nem sikerült.',
+    });
+
+    expect(instructionNudges(h.sent)).toEqual([]);
+    expect(kinds(h.emitted)).not.toContain('filler');
+    expect(kinds(h.emitted)).toContain('supervisor');
+    h.session.dispose();
+  });
+
+  it('should hold the answer response.create until the active response is done', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'Könnyű.', escalated: false });
+    await flush();
+
+    expect(h.sent.map((e) => (e as { type: string }).type)).toEqual([
+      'conversation.item.create',
+    ]);
+
+    h.session.onEvent({ type: 'response.done' });
+
+    expect(h.sent.at(-1)).toEqual({ type: 'response.create' });
+    h.session.dispose();
+  });
+
+  it('should not nudge while a response is active', () => {
+    const h = setup({ filler: true });
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent(askCall());
+
+    vi.advanceTimersByTime(NUDGE_DELAY_MS * 3);
+
+    expect(instructionNudges(h.sent)).toEqual([]);
+    h.session.dispose();
+  });
+
+  it('should drop a held response.create when the user starts speaking', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    h.session.onEvent({ type: 'input_audio_buffer.speech_started' });
+    h.session.onEvent({ type: 'response.done' });
+
+    expect(h.sent.map((e) => (e as { type: string }).type)).not.toContain(
+      'response.create',
+    );
+    h.session.dispose();
+  });
+});

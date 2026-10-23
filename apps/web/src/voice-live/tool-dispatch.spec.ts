@@ -256,3 +256,28 @@ describe('createToolDispatcher — DEMO getOrderStatus', () => {
     expect(outputOf(h.sent[0])).toMatchObject({ stale: true });
   });
 });
+
+describe('createToolDispatcher — settling synchronous failures', () => {
+  it.each([
+    ['askPlantbase', 'not json'],
+    ['askPlantbase', '{"question":"   "}'],
+    ['deleteEverything', '{}'],
+  ])('should settle %s with %s as failed', (name, raw) => {
+    const h = harness();
+    const dispatcher = createToolDispatcher(h.deps);
+
+    dispatcher.handle(call(name, raw));
+
+    expect(h.settled).toHaveLength(1);
+    expect(h.settled[0]).toMatchObject({ name, outcome: 'failed' });
+  });
+
+  it('should settle getOrderStatus as failed when the demo is off', () => {
+    const h = harness({ demoOrders: false });
+    const dispatcher = createToolDispatcher(h.deps);
+
+    dispatcher.handle(call('getOrderStatus', { orderId: '1' }));
+
+    expect(h.settled[0]).toMatchObject({ outcome: 'failed', demo: false });
+  });
+});
