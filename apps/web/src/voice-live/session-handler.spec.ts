@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { realtimeInstructions } from './realtime-instructions';
 import type { RealtimeConfig } from './realtime-config';
-import { clearSessions, isKnownSession } from './session-store';
+import { clearRateLimits } from './rate-limit';
+import {
+  clearSessions,
+  createSession,
+  isKnownSession,
+  MAX_SESSIONS,
+} from './session-store';
 import {
   buildClientSecretBody,
+  SESSION_MINT_LIMIT,
   CLIENT_SECRET_TTL_SECONDS,
   handleSessionRequest,
   type SessionDeps,
@@ -72,7 +79,10 @@ const build = (
 ) => buildClientSecretBody(c, request, model) as SecretBody;
 
 describe('handleSessionRequest', () => {
-  beforeEach(() => clearSessions());
+  beforeEach(() => {
+    clearSessions();
+    clearRateLimits();
+  });
 
   it('should mint a short-lived secret and register a session', async () => {
     const fetchMock = vi.fn().mockResolvedValue(okJson('ek_abc'));
@@ -167,6 +177,41 @@ describe('handleSessionRequest', () => {
       expect(response.status).toBe(400);
     },
   );
+
+  it('should rate-limit minting per client ip before calling OpenAI', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => okJson('ek_abc'));
+    const request = () =>
+      new Request('http://localhost/api/voice/session', {
+        method: 'POST',
+        body: JSON.stringify({ vad: 'server', filler: true }),
+        headers: { 'x-forwarded-for': '10.9.9.9' },
+      });
+
+    for (let i = 0; i < SESSION_MINT_LIMIT; i += 1) {
+      expect((await handleSessionRequest(request(), () => deps(fetchMock))).status).toBe(200);
+    }
+    const refused = await handleSessionRequest(request(), () => deps(fetchMock));
+
+    expect(refused.status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(SESSION_MINT_LIMIT);
+  });
+
+  it('should refuse with 429, not evict live sessions, when the store is full', async () => {
+    const live = createSession() as string;
+    for (let i = 0; i < MAX_SESSIONS - 1; i += 1) {
+      createSession();
+    }
+    const fetchMock = vi.fn().mockResolvedValue(okJson('ek_abc'));
+
+    const response = await handleSessionRequest(
+      post({ vad: 'server', filler: true }),
+      () => deps(fetchMock),
+    );
+
+    expect(response.status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(isKnownSession(live)).toBe(true);
+  });
 
   it('should answer 503 when the API key is missing', async () => {
     const fetchMock = vi.fn();

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { checkRateLimit, clearRateLimits } from './rate-limit';
+import { checkRateLimit, clearRateLimits, rateLimitKeyCount } from './rate-limit';
 
 describe('checkRateLimit', () => {
   beforeEach(() => clearRateLimits());
@@ -28,5 +28,19 @@ describe('checkRateLimit', () => {
     checkRateLimit('k', 1, 1_000, 500);
 
     expect(checkRateLimit('k', 1, 1_000, 1_000)).toBe(true);
+  });
+});
+
+describe('checkRateLimit key sweep', () => {
+  beforeEach(() => clearRateLimits());
+
+  it('should not keep every stale key forever', () => {
+    for (let i = 0; i < 1_500; i += 1) {
+      checkRateLimit(`ip:${i}`, 1, 1_000, 0);
+    }
+
+    checkRateLimit('fresh', 1, 1_000, 60 * 60_000);
+
+    expect(rateLimitKeyCount()).toBeLessThan(10);
   });
 });

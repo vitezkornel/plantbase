@@ -18,14 +18,16 @@ function dropExpired(now: number): void {
   }
 }
 
-export function createSession(now: number = Date.now()): string {
+/** False when MAX_SESSIONS live sessions exist: we refuse rather than evict. */
+export function hasSessionCapacity(now: number = Date.now()): boolean {
   dropExpired(now);
-  while (sessions.size >= MAX_SESSIONS) {
-    const oldest = sessions.keys().next().value;
-    if (oldest === undefined) {
-      break;
-    }
-    sessions.delete(oldest);
+  return sessions.size < MAX_SESSIONS;
+}
+
+/** Null when full: a flood of new sessions must not push out live ones. */
+export function createSession(now: number = Date.now()): string | null {
+  if (!hasSessionCapacity(now)) {
+    return null;
   }
   const id = crypto.randomUUID();
   sessions.set(id, now + SESSION_TTL_MS);

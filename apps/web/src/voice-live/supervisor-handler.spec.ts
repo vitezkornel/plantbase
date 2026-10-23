@@ -25,7 +25,7 @@ describe('handleSupervisorRequest', () => {
   beforeEach(() => {
     clearSessions();
     clearRateLimits();
-    sessionId = createSession();
+    sessionId = createSession() as string;
   });
 
   const ask = (text: string) =>
@@ -245,4 +245,56 @@ describe('handleSupervisorRequest', () => {
 
     expect(response.status).toBe(499);
   });
+
+  it('should answer 504, not a partial 200, when the agent resolves after the timeout', async () => {
+    // Like the real SDK after an abort: it resolves with the last closed step's text.
+    const run = vi.fn(
+      ({ signal }: AskInput) =>
+        new Promise<string>((resolve) => {
+          signal.addEventListener('abort', () => resolve('Megnézem a katalógust.'));
+        }),
+    );
+
+    const response = await handleSupervisorRequest(
+      post({ sessionId, question: 'k' }),
+      run,
+      Date.now,
+      20,
+    );
+
+    expect(response.status).toBe(504);
+  });
+
+  it('should answer 499 when the agent resolves after a client abort', async () => {
+    const controller = new AbortController();
+    const run = vi.fn(
+      ({ signal }: AskInput) =>
+        new Promise<string>((resolve) => {
+          if (signal.aborted) {
+            resolve('félkész');
+            return;
+          }
+          signal.addEventListener('abort', () => resolve('félkész'));
+        }),
+    );
+
+    const pending = handleSupervisorRequest(
+      post({ sessionId, question: 'k' }, { signal: controller.signal }),
+      run,
+    );
+    await Promise.resolve();
+    controller.abort();
+
+    expect((await pending).status).toBe(499);
+  });
+
+  it('should answer 502 instead of an empty answer', async () => {
+    const response = await handleSupervisorRequest(
+      post({ sessionId, question: 'k' }),
+      ask('   '),
+    );
+
+    expect(response.status).toBe(502);
+  });
+
 });

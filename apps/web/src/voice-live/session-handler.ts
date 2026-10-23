@@ -17,7 +17,8 @@ import {
   SessionRequestSchema,
   type SessionRequest,
 } from './session-request-schema';
-import { createSession } from './session-store';
+import { checkRateLimit, clientIp } from './rate-limit';
+import { createSession, hasSessionCapacity } from './session-store';
 
 export const CLIENT_SECRETS_URL =
   'https://api.openai.com/v1/realtime/client_secrets';
@@ -25,6 +26,10 @@ export const CLIENT_SECRETS_URL =
 // that has started keeps running after it expires (OpenAI docs).
 export const CLIENT_SECRET_TTL_SECONDS = 60;
 
+// Every session is a paid OpenAI client_secrets call: bound minting per ip.
+export const SESSION_MINT_LIMIT = 5;
+const MINT_WINDOW_MS = 60_000;
+const TOO_MANY_MESSAGE = 'Túl sok kérés, várj egy kicsit.';
 const INVALID_REQUEST_MESSAGE = 'Érvénytelen kérés.';
 const UPSTREAM_ERROR_MESSAGE = 'Nem sikerült hangmunkamenetet indítani.';
 
@@ -146,6 +151,18 @@ export async function handleSessionRequest(
     return Response.json({ error: INVALID_REQUEST_MESSAGE }, { status: 400 });
   }
 
+  if (
+    !checkRateLimit(
+      `mint:${clientIp(request)}`,
+      SESSION_MINT_LIMIT,
+      MINT_WINDOW_MS,
+    ) ||
+    !hasSessionCapacity()
+  ) {
+    logger.warn('api_voice_live.session_rate_limited');
+    return Response.json({ error: TOO_MANY_MESSAGE }, { status: 429 });
+  }
+
   const startedAt = Date.now();
   let model = deps.config.model;
   try {
@@ -172,13 +189,18 @@ export async function handleSessionRequest(
       logger.error('api_voice_live.session_failed', { errorName: 'NoSecret' });
       return upstreamFailure();
     }
+    const sessionId = createSession();
+    if (sessionId === null) {
+      logger.warn('api_voice_live.session_rate_limited');
+      return Response.json({ error: TOO_MANY_MESSAGE }, { status: 429 });
+    }
     logger.info('api_voice_live.session_created', {
       ms: Date.now() - startedAt,
       model,
     });
     return Response.json({
       clientSecret,
-      sessionId: createSession(),
+      sessionId,
       model,
       demoOrders: deps.config.demoOrders,
     });

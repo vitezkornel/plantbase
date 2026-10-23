@@ -4,7 +4,7 @@ import { ESCALATE_PREFIX, logger } from 'core';
 import { splitEscalation } from '../chat/escalation';
 import { safeErrorFields } from '../voice/safe-error-fields';
 import { MAX_SPOKEN_CHARS } from '../voice/spoken-text';
-import { checkRateLimit } from './rate-limit';
+import { checkRateLimit, clientIp } from './rate-limit';
 import { isKnownSession } from './session-store';
 import { askSupervisor, type AskInput } from './supervisor-ask';
 import {
@@ -29,12 +29,6 @@ const errors = {
 
 const fail = (message: string, status: number): Response =>
   Response.json({ error: message }, { status });
-
-function clientIp(request: Request): string {
-  return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  );
-}
 
 export async function handleSupervisorRequest(
   request: Request,
@@ -83,6 +77,11 @@ export async function handleSupervisorRequest(
         : { clientTranscript: parsed.approxTranscript }),
       signal,
     });
+    // After an abort the SDK may resolve with the last closed step's text (or
+    // nothing): that is a cut-off answer, never one to speak.
+    if (signal.aborted || text.trim() === '') {
+      throw new Error('supervisor produced no complete answer');
+    }
     const { text: answer, isEscalated } = splitEscalation(
       text,
       ESCALATE_PREFIX,

@@ -39,6 +39,7 @@ export async function openRealtimeConnection({
   // Events sent before the channel is open (the history seed) wait here.
   const outbox = createSendBuffer();
   let microphone: MediaStream | undefined;
+  let opened = false;
   let closed = false;
   const close = (): void => {
     if (closed) {
@@ -50,11 +51,16 @@ export async function openRealtimeConnection({
     peer.close();
     microphone?.getTracks().forEach((track) => track.stop());
     audio.srcObject = null;
-    onClose();
+    // A failed setup is reported by the rejected promise; onClose is for a
+    // connection that was up, so the caller does not swallow the error.
+    if (opened) {
+      onClose();
+    }
   };
 
   const channel = peer.createDataChannel(DATA_CHANNEL_NAME);
   channel.onopen = () => {
+    opened = true;
     outbox.attach((event) => channel.send(JSON.stringify(event)));
     onOpen();
   };
