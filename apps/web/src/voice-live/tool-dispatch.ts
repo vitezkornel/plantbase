@@ -14,6 +14,8 @@ import {
 export interface SupervisorResult {
   answer: string;
   escalated: boolean;
+  /** How long the server-side handler took (for the event log only). */
+  serverMs?: number;
 }
 
 export interface DispatchInfo {

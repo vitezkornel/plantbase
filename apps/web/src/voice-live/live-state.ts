@@ -14,6 +14,7 @@ export type LogKind =
   | 'question'
   | 'answer'
   | 'assistant'
+  | 'timing'
   | 'supervisor'
   | 'silence'
   | 'stale'

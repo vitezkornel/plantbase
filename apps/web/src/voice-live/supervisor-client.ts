@@ -9,6 +9,7 @@ import type { SupervisorResult } from './tool-dispatch';
 const SupervisorResponseSchema = z.object({
   answer: z.string(),
   escalated: z.boolean(),
+  serverMs: z.number().nonnegative().optional(),
 });
 
 export function parseSupervisorResponse(body: unknown): SupervisorResult {

@@ -44,6 +44,7 @@ describe('handleSupervisorRequest', () => {
     expect(await response.json()).toEqual({
       answer: 'A pothos könnyen gondozható.',
       escalated: false,
+      serverMs: expect.any(Number),
     });
     expect(run.mock.calls[0][0].question).toBe('Mi a pothos?');
   });
@@ -80,7 +81,7 @@ describe('handleSupervisorRequest', () => {
       ask('[ESCALATE] Egy kolléga jelentkezik.'),
     );
 
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       answer: 'Egy kolléga jelentkezik.',
       escalated: true,
     });

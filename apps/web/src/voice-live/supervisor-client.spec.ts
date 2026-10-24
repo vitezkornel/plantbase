@@ -20,6 +20,12 @@ describe('parseSupervisorResponse', () => {
     expect(() => parseSupervisorResponse(body)).toThrow();
   });
 
+  it('should keep the server-measured time when present', () => {
+    expect(
+      parseSupervisorResponse({ answer: 'x', escalated: false, serverMs: 5876 }),
+    ).toEqual({ answer: 'x', escalated: false, serverMs: 5876 });
+  });
+
   it('should drop unknown keys', () => {
     expect(
       parseSupervisorResponse({ answer: 'x', escalated: true, extra: 1 }),

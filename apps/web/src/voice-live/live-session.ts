@@ -120,9 +120,19 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   let retryHandle: ReturnType<typeof setTimeout> | undefined;
   const busy = (): boolean => responding || createInFlight;
 
+  let heldSince: number | null = null;
   const sendCreate = (event: object, source: 'nudge' | 'answer'): void => {
     createInFlight = true;
     lastCreate = source;
+    if (source === 'answer') {
+      log(
+        'timing',
+        heldSince === null
+          ? 'Részidő: eredmény elküldve a modellnek'
+          : `Részidő: eredmény elküldve a modellnek (tartva ${seconds(now() - heldSince)})`,
+      );
+      heldSince = null;
+    }
     deps.send(event);
   };
   const clearRetry = (): void => {
@@ -198,8 +208,29 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
 
   const dispatcher = createToolDispatcher({
     fetchSupervisor: (question, signal) => {
-      const ask = (): Promise<SupervisorResult> =>
-        deps.fetchSupervisor(question, signal, [...transcripts]);
+      const begun = now();
+      const ask = (): Promise<SupervisorResult> => {
+        const requested = now();
+        return deps
+          .fetchSupervisor(question, signal, [...transcripts])
+          .then((result) => {
+            if (!signal.aborted) {
+              // Where the time between the tool call and the answer went.
+              if (requested > begun) {
+                log('timing', `Részidő: átirat-várakozás ${seconds(requested - begun)}`);
+              }
+              const fetched = now() - requested;
+              log('timing', `Részidő: supervisor-kérés (fetch) ${seconds(fetched)}`);
+              if (result.serverMs !== undefined) {
+                log(
+                  'timing',
+                  `Részidő: ebből a szerver ${seconds(result.serverMs)}, a többi (hálózat, route-indulás) ${seconds(Math.max(0, fetched - result.serverMs))}`,
+                );
+              }
+            }
+            return result;
+          });
+      };
       // No pending transcript: ask at once, without an extra tick.
       return transcriptPending
         ? awaitTranscript(signal).then(ask)
@@ -208,6 +239,10 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     send: (event) => {
       if ('type' in event && event.type === 'response.create') {
         if (busy()) {
+          if (!responseHeld) {
+            log('timing', 'Részidő: eredmény tartva, a modell még beszél');
+            heldSince = now();
+          }
           responseHeld = true;
           return;
         }
@@ -244,6 +279,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         );
         meter.speechStarted();
         responseHeld = false;
+        heldSince = null;
         createInFlight = false;
         clearRetry();
         idle.touch();

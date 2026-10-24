@@ -111,6 +111,9 @@ export async function handleSupervisorRequest(
     return Response.json({
       answer: answer.slice(0, MAX_SPOKEN_CHARS),
       escalated: isEscalated,
+      // For the client's event log: how long the handler itself took, so the
+      // rest of the client-measured time is network / route start-up.
+      serverMs: now() - startedAt,
     });
   } catch (error: unknown) {
     if (request.signal.aborted) {

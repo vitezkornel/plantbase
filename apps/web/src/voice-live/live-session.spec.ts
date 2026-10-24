@@ -674,3 +674,100 @@ describe('createLiveSession — transcripts for the supervisor', () => {
     h.session.dispose();
   });
 });
+
+describe('createLiveSession — partial timings in the event log', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const timings = (emitted: LiveAction[]) =>
+    logs(emitted)
+      .filter((l) => l.kind === 'timing')
+      .map((l) => l.text);
+
+  it('should show how long the supervisor request itself took', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+
+    h.advance(3200);
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    expect(timings(h.emitted)).toContain('Részidő: supervisor-kérés (fetch) 3.2 s');
+    expect(timings(h.emitted).join('|')).not.toContain('átirat-várakozás');
+    h.session.dispose();
+  });
+
+  it('should show the wait for the transcript separately from the request', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent(askCall());
+
+    h.advance(700);
+    h.session.onEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Milyen kaktuszaitok vannak?',
+    });
+    await flush();
+    h.advance(2000);
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    expect(timings(h.emitted)).toContain('Részidő: átirat-várakozás 0.7 s');
+    expect(timings(h.emitted)).toContain('Részidő: supervisor-kérés (fetch) 2.0 s');
+    h.session.dispose();
+  });
+
+  it('should split the request into server time and the rest', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+
+    h.advance(15600);
+    h.resolveNext({ answer: 'x', escalated: false, serverMs: 5900 });
+    await flush();
+
+    expect(timings(h.emitted)).toContain(
+      'Részidő: ebből a szerver 5.9 s, a többi (hálózat, route-indulás) 9.7 s',
+    );
+    h.session.dispose();
+  });
+
+  it('should show when the result was handed to the model', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    expect(timings(h.emitted)).toContain('Részidő: eredmény elküldve a modellnek');
+    h.session.dispose();
+  });
+
+  it('should show that the result was held while the model was speaking, and for how long', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    expect(timings(h.emitted)).toContain('Részidő: eredmény tartva, a modell még beszél');
+
+    h.advance(1200);
+    h.session.onEvent({ type: 'response.done' });
+
+    expect(timings(h.emitted)).toContain(
+      'Részidő: eredmény elküldve a modellnek (tartva 1.2 s)',
+    );
+    h.session.dispose();
+  });
+
+  it('should not show request timings for a call that was cut off by the user', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+
+    h.session.onEvent({ type: 'input_audio_buffer.speech_started' });
+    await flush();
+
+    expect(timings(h.emitted)).toEqual([]);
+    h.session.dispose();
+  });
+});
