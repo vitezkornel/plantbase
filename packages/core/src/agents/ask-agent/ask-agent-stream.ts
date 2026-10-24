@@ -29,6 +29,7 @@ import {
   type InteractionMode,
   type InteractionOutcome,
 } from '../../logging/jsonl-logger.js';
+import { createStepTimer, type StepTimer } from '../../logging/step-timing.js';
 import { logger } from '../../logging/structured-logger.js';
 import {
   extractToolCalls,
@@ -119,10 +120,11 @@ export function streamAskAgent(
 
   const mode = options.mode ?? 'text';
   const system = systemPromptFor(mode);
+  const timer = createStepTimer();
   const logOnce = createInteractionLogger(
     messages,
     system,
-    { mode, clientTranscript: options.clientTranscript },
+    { mode, clientTranscript: options.clientTranscript, timer },
     options.onLogWritten,
   );
   // onError gets no steps from the SDK, so the finished ones are kept here.
@@ -134,12 +136,13 @@ export function streamAskAgent(
     // Only our own (cached) system message is in `messages`: the input schema
     // rejects any client-sent system message.
     allowSystemInMessages: true,
-    tools: ASK_AGENT_TOOLS,
+    tools: timer.wrapTools(ASK_AGENT_TOOLS),
     maxOutputTokens: MAX_TOKENS,
     stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
     abortSignal: options.abortSignal,
     ...providerOptionsFor(mode),
     onStepFinish: (step) => {
+      timer.stepFinished();
       finishedSteps = [...finishedSteps, step];
     },
     // After an error the SDK may still call onFinish (when a step had
@@ -194,6 +197,7 @@ function createInteractionLogger(
 interface LogExtras {
   mode: AskAgentMode;
   clientTranscript: string | undefined;
+  timer: StepTimer;
 }
 
 function buildLogEntry(
@@ -217,6 +221,7 @@ function buildLogEntry(
     escalated: text.startsWith(ESCALATE_PREFIX),
     outcome,
     mode: extras.mode,
+    timings: extras.timer.snapshot(),
     ...(extras.clientTranscript === undefined
       ? {}
       : {

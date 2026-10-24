@@ -75,7 +75,7 @@ Sikeres, ha:
 
 ### 5.3 A realtime instructions (fix konstans)
 
-A persona: Plantbase lakberendezési tanácsadó, **mindig magyarul** válaszol, rövid, beszélt mondatokban, markdown és lista nélkül. Szabályok:
+A persona: Plantbase növénykatalógus-tanácsadó, **mindig magyarul** válaszol, rövid, beszélt mondatokban, markdown és lista nélkül. Szabályok:
 
 1. **Termék, ár, készlet, gondozás** állítást kizárólag az `askPlantbase` eredményéből mondhat. Ha nincs eredmény, hiba vagy időtúllépés történt, ezt mondja ki, és ne találjon ki semmit.
 2. **Önálló kérdés:** az `askPlantbase` `question` mezőjét önállóan érthetően fogalmazza meg, a korábbi kontextust beleírva (pl. „és az pet-safe?” → „Melyik kaktusz háziállat-barát?”), mert a supervisor nem kap előzményt. A JSONL-ben ez a kérdés látszik.
@@ -116,6 +116,7 @@ A supervisor hívásai a meglévő `writeInteractionLog`-on át kerülnek a napl
 - `mode: 'voice-live'`;
 - a `messages` user-üzenete a supervisornak átadott kérdés, vagyis **a modell saját megfogalmazása**;
 - `clientTranscript: { text, approximate: true }` a `transcripts` utolsó eleméből, ha a kliens küldött ilyet (a realtime bemeneti átirat, **közelítés**).
+- `timings: { totalMs, steps: [{ startMs, endMs, tools: [{ name, startMs, endMs }], unfinished? }] }` — a streamelő ask-agent minden módban naplózza, mikor kezdődött és ért véget egy modellkör (+ tool-hívásai) az interakció kezdetétől számított ms-ben; a nem visszatért tool `endMs: null`-lal, `unfinished` lezáró lépésben látszik. Csak időzítés és tool-név, tartalom nincs benne. Így mérhető, hogy a lassúságot a modell vagy egy tool viszi el.
 
 ### 6.2 Üzemi log
 

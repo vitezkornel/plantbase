@@ -504,3 +504,24 @@ describe('streamAskAgent voice-live mode', () => {
     );
   });
 });
+
+describe('streamAskAgent step timings', () => {
+  it('should log when each model round and tool call started and ended', async () => {
+    let logPath = '';
+    const result = streamAskAgent(question, {
+      model: makeToolUsingModel('SELECT 1', 'Kész.'),
+      onLogWritten: (p) => (logPath = p),
+    });
+    await result.text;
+    await vi.waitFor(() => expect(logPath).not.toBe(''));
+    const entry = JSON.parse((await readFile(logPath, 'utf-8')).trim());
+    await rm(logPath, { force: true });
+
+    expect(entry.timings.steps).toHaveLength(2);
+    expect(entry.timings.steps[0].tools[0].name).toBe('runSql');
+    expect(entry.timings.steps[0].tools[0].endMs).toEqual(expect.any(Number));
+    expect(entry.timings.steps[0].startMs).toBe(0);
+    expect(entry.timings.steps[1].startMs).toBe(entry.timings.steps[0].endMs);
+    expect(entry.timings.totalMs).toBeGreaterThanOrEqual(entry.timings.steps[1].endMs);
+  });
+});

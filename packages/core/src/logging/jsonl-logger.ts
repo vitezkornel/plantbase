@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ModelMessage } from 'ai';
 import { REPO_ROOT } from '../config/repo-root.js';
+import type { InteractionTimings } from './step-timing.js';
 import type { ToolOutcome } from '../tools/tool-outcome.js';
 
 // FR4 (now COMPLETE — see docs/brs-plantbase.md): "minden interakciót
@@ -74,6 +75,8 @@ export interface InteractionLogEntry {
   mode?: InteractionMode;
   /** Set for voice-live: the client's approximate transcript of the user. */
   clientTranscript?: ClientTranscript;
+  /** When each model round and tool call started/ended (streaming agent). */
+  timings?: InteractionTimings;
 }
 
 export type InteractionOutcome = 'ok' | 'error' | 'aborted';
