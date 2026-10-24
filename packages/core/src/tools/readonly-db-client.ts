@@ -16,6 +16,10 @@
 import { Pool } from 'pg';
 import '../config/env.js';
 
+const CONNECTION_TIMEOUT_MS = 5_000;
+const STATEMENT_TIMEOUT_MS = 8_000;
+const QUERY_TIMEOUT_MS = 10_000;
+
 let pool: Pool | undefined;
 
 function getPool(): Pool {
@@ -37,7 +41,17 @@ function getPool(): Pool {
   // once the event loop drains. This lets the process exit promptly once
   // connections go idle, without closing the pool mid-session — the pool
   // is still reused across multiple questions within one interactive run.
-  pool = new Pool({ connectionString, allowExitOnIdle: true });
+  // Time limits: a stalled database must fail a tool call, not hang it —
+  // the agent loop (and the voice supervisor's 20 s limit) cannot cancel a
+  // query that never returns. statement_timeout is enforced by Postgres,
+  // query_timeout by the client as a backstop.
+  pool = new Pool({
+    connectionString,
+    allowExitOnIdle: true,
+    connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
+    statement_timeout: STATEMENT_TIMEOUT_MS,
+    query_timeout: QUERY_TIMEOUT_MS,
+  });
   return pool;
 }
 

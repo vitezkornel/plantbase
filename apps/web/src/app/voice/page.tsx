@@ -10,7 +10,8 @@ export default function VoicePage() {
         <h1>Plantbase hang</h1>
         <p>
           Tartsd nyomva a gombot (vagy a szóközt), és kérdezz magyarul.{' '}
-          <Link href="/">Vissza a szöveges chatre</Link>
+          <Link href="/">Vissza a szöveges chatre</Link>{' '}
+          <Link href="/voice/live">Élő (realtime) változat</Link>
         </p>
       </header>
       <VoicePanel escalatePrefix={ESCALATE_PREFIX} />

@@ -131,6 +131,14 @@ A `pnpm nx dev web` után a `http://localhost:3001/voice` oldalon nyomva tartott
 - **Napló:** hangot nem tárolunk; az átirat csak a JSONL interakció-naplóba kerül, az üzemi logba csak esemény és ms.
 - **Mérések:** a kézi próba eredményeit a [`docs/voice-meresek.md`](docs/voice-meresek.md) sablonba kell írni.
 
+### Élő változat (`/voice/live`)
+
+A `http://localhost:3001/voice/live` oldalon a böngésző WebRTC-n közvetlenül az OpenAI Realtime API-hoz kapcsolódik (a szerver csak egy 60 s-os ephemeral tokent ad), és kapcsolódás után szabadon lehet magyarul beszélni. A tartalmat egyetlen `askPlantbase` tool hozza: a `POST /api/voice/supervisor` a meglévő ask-agentet futtatja `voice-live` módban. Az eseménylog mutatja a közbevágást, a tool-hívást, a fillert és a kétféle csendet (beszéd végétől / tool-hívástól). **Fülhallgató ajánlott**, különben a hangszóróból visszajövő hang hamis közbevágást okoz.
+
+- **Szükséges:** `OPENAI_API_KEY` (csak szerveren).
+- **Opcionális:** `VOICE_REALTIME_MODEL`, `VOICE_REALTIME_FALLBACK_MODEL`, `VOICE_REALTIME_REASONING_EFFORT`, `VOICE_REALTIME_VOICE` (lásd `.env.example`); `VOICE_DEMO_ORDERS=1` bekapcsolja a kitalált, `DEMO`-val jelölt `getOrderStatus` toolt (6 s késleltetéssel).
+- **Kézi ellenőrzés:** [`docs/voice-live-kezi-ellenorzes.md`](docs/voice-live-kezi-ellenorzes.md).
+
 ## Architektúra
 
 Nx monorepo (pnpm), öt projekt:

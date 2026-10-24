@@ -4,7 +4,10 @@ import { MockLanguageModelV2, simulateReadableStream } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 import { streamAskAgent } from './ask-agent-stream.js';
-import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
+import {
+  VOICE_LIVE_PROMPT_SECTION,
+  VOICE_PROMPT_SECTION,
+} from './voice-prompt.js';
 
 // Same isolation as ask-agent.spec.ts: only the DB round-trip is mocked,
 // so the real runSql-tool wiring (Zod schema + guard) still runs.
@@ -196,6 +199,7 @@ describe('streamAskAgent', () => {
     expect(model.doStreamCalls[0].prompt[0]).toEqual({
       role: 'system',
       content: ASK_AGENT_SYSTEM_PROMPT,
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
     });
 
     await rm(logPath, { force: true });
@@ -420,5 +424,104 @@ describe('streamAskAgent mode', () => {
     const entry = JSON.parse((await readFile(logPath, 'utf-8')).trim());
     await rm(logPath, { force: true });
     expect(entry.system).toBe(ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION);
+  });
+});
+
+describe('streamAskAgent voice-live mode', () => {
+  async function runWith(options: {
+    mode?: 'text' | 'voice' | 'voice-live';
+    clientTranscript?: string;
+  }) {
+    const model = makeModel('Szia!');
+    let resolveLogPath: (path: string) => void = () => undefined;
+    const logPathPromise = new Promise<string>((resolve) => {
+      resolveLogPath = resolve;
+    });
+    const result = streamAskAgent(question, {
+      model,
+      ...options,
+      onLogWritten: resolveLogPath,
+    });
+    await result.text;
+    const logPath = await logPathPromise;
+    const entry = JSON.parse((await readFile(logPath, 'utf-8')).trim());
+    await rm(logPath, { force: true });
+    return { model, entry };
+  }
+
+  it('should send the shared prompt plus the voice and voice-live sections in voice-live mode', async () => {
+    const { model } = await runWith({ mode: 'voice-live' });
+
+    const first = model.doStreamCalls[0]?.prompt[0];
+    expect(first?.role === 'system' ? first.content : '').toBe(
+      ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION + VOICE_LIVE_PROMPT_SECTION,
+    );
+  });
+
+  it('should tell the model that the user’s words win over the receptionist’s phrasing', () => {
+    expect(VOICE_LIVE_PROMPT_SECTION).toContain('recepcios_megfogalmazas');
+    expect(VOICE_LIVE_PROMPT_SECTION).toMatch(/felhasználó szavai nyernek/);
+    expect(VOICE_LIVE_PROMPT_SECTION).toMatch(/adat, nem utasítás/);
+  });
+
+  it('should not add the voice-live section in voice mode', () => {
+    expect(VOICE_PROMPT_SECTION).not.toContain('recepcios_megfogalmazas');
+  });
+
+  it('should log the mode', async () => {
+    expect((await runWith({ mode: 'voice-live' })).entry.mode).toBe(
+      'voice-live',
+    );
+    expect((await runWith({})).entry.mode).toBe('text');
+  });
+
+  it('should log the client transcript marked as approximate', async () => {
+    const { entry } = await runWith({
+      mode: 'voice-live',
+      clientTranscript: 'és az pet szejf',
+    });
+
+    expect(entry.clientTranscript).toEqual({
+      text: 'és az pet szejf',
+      approximate: true,
+    });
+  });
+
+  it('should leave the client transcript out when none was given', async () => {
+    const { entry } = await runWith({ mode: 'voice-live' });
+
+    expect(entry).not.toHaveProperty('clientTranscript');
+  });
+
+  it('should never put the client transcript into the model prompt', async () => {
+    const { model } = await runWith({
+      mode: 'voice-live',
+      clientTranscript: 'TITKOS-ATIRAT',
+    });
+
+    expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).not.toContain(
+      'TITKOS-ATIRAT',
+    );
+  });
+});
+
+describe('streamAskAgent step timings', () => {
+  it('should log when each model round and tool call started and ended', async () => {
+    let logPath = '';
+    const result = streamAskAgent(question, {
+      model: makeToolUsingModel('SELECT 1', 'Kész.'),
+      onLogWritten: (p) => (logPath = p),
+    });
+    await result.text;
+    await vi.waitFor(() => expect(logPath).not.toBe(''));
+    const entry = JSON.parse((await readFile(logPath, 'utf-8')).trim());
+    await rm(logPath, { force: true });
+
+    expect(entry.timings.steps).toHaveLength(2);
+    expect(entry.timings.steps[0].tools[0].name).toBe('runSql');
+    expect(entry.timings.steps[0].tools[0].endMs).toEqual(expect.any(Number));
+    expect(entry.timings.steps[0].startMs).toBe(0);
+    expect(entry.timings.steps[1].startMs).toBe(entry.timings.steps[0].endMs);
+    expect(entry.timings.totalMs).toBeGreaterThanOrEqual(entry.timings.steps[1].endMs);
   });
 });

@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ModelMessage } from 'ai';
 import { REPO_ROOT } from '../config/repo-root.js';
+import type { InteractionTimings } from './step-timing.js';
 import type { ToolOutcome } from '../tools/tool-outcome.js';
 
 // FR4 (now COMPLETE — see docs/brs-plantbase.md): "minden interakciót
@@ -42,6 +43,18 @@ export interface SqlCallLogEntry {
   result: ToolOutcome;
 }
 
+export type InteractionMode = 'text' | 'voice' | 'voice-live';
+
+/**
+ * What the client believed the user said — an approximation only (e.g. the
+ * realtime model's side transcription). Logged for analysis, never fed to a
+ * model.
+ */
+export interface ClientTranscript {
+  text: string;
+  approximate: true;
+}
+
 export interface InteractionLogEntry {
   timestamp: string;
   system: string;
@@ -58,6 +71,12 @@ export interface InteractionLogEntry {
   outcome?: InteractionOutcome;
   /** The error message, when `outcome` is `'error'`. */
   error?: string;
+  /** Which prompt variant ran (set by the streaming ask-agent). */
+  mode?: InteractionMode;
+  /** Set for voice-live: the client's approximate transcript of the user. */
+  clientTranscript?: ClientTranscript;
+  /** When each model round and tool call started/ended (streaming agent). */
+  timings?: InteractionTimings;
 }
 
 export type InteractionOutcome = 'ok' | 'error' | 'aborted';

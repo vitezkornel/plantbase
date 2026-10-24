@@ -44,3 +44,17 @@ Kézi, füllel végzett összevetés a `/voice` oldalon, ugyanazokkal a kérdés
 Döntés: az alapérték a `gpt-4o-mini-tts-2025-03-20`; a snapshot kivezetésre jelölt, ezért ha az API a modellt nem elérhetőnek jelzi, az adott mondatot automatikusan `tts-1`-gyel generáljuk újra (`api_voice.tts_fallback {from, to}`).
 
 **Filler a javítás után.** A filler a `filler-cache` javítása (a cache a `globalThis`-on él) után szól: kézi próbán `runSql` és `searchKnowledge` kérdésnél is hallható volt, a tool-hívás pillanatában, a válasz előtt.
+
+## 2. szakasz: `/voice/live` (hibrid realtime + supervisor, 2026-10-24)
+
+Kézi próba, `gpt-realtime-2.1`, fülhallgatóval. Részletes ellenőrzőlista: [`docs/voice-live-kezi-ellenorzes.md`](voice-live-kezi-ellenorzes.md).
+
+| Mutató | Érték | Megjegyzés |
+|---|---|---|
+| Csend a beszéd végétől az első hangig | ~0,3–0,5 s | a realtime modell filler vagy válasz hangja |
+| Supervisor (`supervisor_done`) a javítások előtt | 9,3–17,5 s | thinking alapból be, nincs prompt caching |
+| Supervisor a javítások után | ~5,6–6,1 s | thinking kikapcsolva (`VOICE_THINKING=off`) + prompt caching |
+| Első hívás extra ideje | ~7–10 s | **csak dev**: az első kérésnél a `/api/voice/supervisor` route fordítása és a core betöltése; a második/harmadik hívásnál a „többi” (hálózat, route-indulás) 0,1 s |
+
+- A tool-hívástól a válaszig mért idő a szerver ideje (`serverMs`) és a „többi” összege; a kettő különbsége az eseménylogban látszik.
+- A thinking-kikapcsolás és a prompt caching előtti és utáni értékek ugyanazzal a kérdéstípussal (kaktusz-katalógus) készültek, de nem kontrollált mérésben.

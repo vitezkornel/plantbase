@@ -55,3 +55,4 @@ A `docs/brs-plantbase.md`-ben szerepelnek, de a kódban / sémában nincs megfel
 
 - **Szoba és adottságai** — a szoba fénye, mérete és **színe**. A fény és a méret ma csak a kérdésből, szabad szövegként jut el az agenthez, és a termék `light` / méret-mezőire képződik le; a szín semmilyen termék-attribútumra nem képződik le.
 - **Növénycsomag** — egy szobára / ügyfélre összeállított termék-válogatás (összár, költségkeret). Ma csak az agent válaszában, ad hoc létezik; nincs tárolt entitása.
+- **Rendelés** (csak demó, kitalált adat; a `/voice/live` `getOrderStatus` eszköze `VOICE_DEMO_ORDERS=1` esetén; a valódi rendelési kérdés továbbra is eszkalálandó) — nincs tárolt entitása, az ask-agent és az adatbázis nem éri el.

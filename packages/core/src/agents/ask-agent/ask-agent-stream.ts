@@ -26,8 +26,10 @@ import '../../config/env.js';
 import {
   writeInteractionLog,
   type InteractionLogEntry,
+  type InteractionMode,
   type InteractionOutcome,
 } from '../../logging/jsonl-logger.js';
+import { createStepTimer, type StepTimer } from '../../logging/step-timing.js';
 import { logger } from '../../logging/structured-logger.js';
 import {
   extractToolCalls,
@@ -43,7 +45,12 @@ import {
   type AskAgentTools,
 } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
-import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
+import { cachedSystemMessage } from '../prompt-cache.js';
+import { anthropicOptionsFor } from './model-options.js';
+import {
+  VOICE_LIVE_PROMPT_SECTION,
+  VOICE_PROMPT_SECTION,
+} from './voice-prompt.js';
 
 // The conversation crosses into packages/core from the outside (a browser,
 // via apps/web) — an untrusted-input boundary (konvenciok.md "Biztonság"),
@@ -70,8 +77,12 @@ const StreamAskAgentInputSchema = z
     message: 'the conversation must end with a user message',
   });
 
-/** `text` (default) is the shared prompt as is; `voice` appends the spoken-answer section. */
-export type AskAgentMode = 'text' | 'voice';
+/**
+ * `text` (default) is the shared prompt as is; `voice` appends the
+ * spoken-answer section; `voice-live` is the realtime supervisor: the same
+ * spoken-answer section as `voice` plus the voice-live addendum.
+ */
+export type AskAgentMode = InteractionMode;
 
 export interface StreamAskAgentOptions {
   /** Which prompt variant to run; defaults to `text`. */
@@ -82,6 +93,11 @@ export interface StreamAskAgentOptions {
   onLogWritten?: (logPath: string) => void;
   /** Stops the model call (and logs the interaction as `aborted`). */
   abortSignal?: AbortSignal;
+  /**
+   * voice-live only: the client's approximate transcript of what the user
+   * said. Logged (marked approximate); never sent to the model.
+   */
+  clientTranscript?: string;
 }
 
 type AskAgentStep = StepResult<AskAgentTools>;
@@ -102,10 +118,13 @@ export function streamAskAgent(
 ): StreamTextResult<AskAgentTools, never> {
   StreamAskAgentInputSchema.parse(messages);
 
-  const system = systemPromptFor(options.mode ?? 'text');
+  const mode = options.mode ?? 'text';
+  const system = systemPromptFor(mode);
+  const timer = createStepTimer();
   const logOnce = createInteractionLogger(
     messages,
     system,
+    { mode, clientTranscript: options.clientTranscript, timer },
     options.onLogWritten,
   );
   // onError gets no steps from the SDK, so the finished ones are kept here.
@@ -113,13 +132,17 @@ export function streamAskAgent(
 
   return streamText({
     model: options.model ?? anthropic(MODEL_ID),
-    system,
-    messages,
-    tools: ASK_AGENT_TOOLS,
+    messages: [cachedSystemMessage(system), ...messages],
+    // Only our own (cached) system message is in `messages`: the input schema
+    // rejects any client-sent system message.
+    allowSystemInMessages: true,
+    tools: timer.wrapTools(ASK_AGENT_TOOLS),
     maxOutputTokens: MAX_TOKENS,
     stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
     abortSignal: options.abortSignal,
+    ...providerOptionsFor(mode),
     onStepFinish: (step) => {
+      timer.stepFinished();
       finishedSteps = [...finishedSteps, step];
     },
     // After an error the SDK may still call onFinish (when a step had
@@ -150,6 +173,7 @@ interface LogRequest {
 function createInteractionLogger(
   messages: ModelMessage[],
   system: string,
+  extras: LogExtras,
   onLogWritten: ((logPath: string) => void) | undefined,
 ): (request: LogRequest) => Promise<void> {
   let isLogged = false;
@@ -161,7 +185,7 @@ function createInteractionLogger(
     isLogged = true;
     try {
       const logPath = await writeInteractionLog(
-        buildLogEntry(messages, system, request),
+        buildLogEntry(messages, system, extras, request),
       );
       onLogWritten?.(logPath);
     } catch (error: unknown) {
@@ -170,9 +194,16 @@ function createInteractionLogger(
   };
 }
 
+interface LogExtras {
+  mode: AskAgentMode;
+  clientTranscript: string | undefined;
+  timer: StepTimer;
+}
+
 function buildLogEntry(
   messages: ModelMessage[],
   system: string,
+  extras: LogExtras,
   { outcome, steps, error }: LogRequest,
 ): Omit<InteractionLogEntry, 'timestamp'> {
   const lastStep = steps.at(-1);
@@ -189,6 +220,16 @@ function buildLogEntry(
     sqlCalls: extractSqlCalls(extractToolCalls(steps)),
     escalated: text.startsWith(ESCALATE_PREFIX),
     outcome,
+    mode: extras.mode,
+    timings: extras.timer.snapshot(),
+    ...(extras.clientTranscript === undefined
+      ? {}
+      : {
+          clientTranscript: {
+            text: extras.clientTranscript,
+            approximate: true as const,
+          },
+        }),
     ...(error === undefined ? {} : { error }),
   };
 }
@@ -205,7 +246,15 @@ function errorMessage(error: unknown): string {
 }
 
 function systemPromptFor(mode: AskAgentMode): string {
-  return mode === 'voice'
-    ? ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION
-    : ASK_AGENT_SYSTEM_PROMPT;
+  if (mode === 'text') {
+    return ASK_AGENT_SYSTEM_PROMPT;
+  }
+  return mode === 'voice-live'
+    ? ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION + VOICE_LIVE_PROMPT_SECTION
+    : ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION;
+}
+
+function providerOptionsFor(mode: AskAgentMode) {
+  const providerOptions = anthropicOptionsFor(mode);
+  return providerOptions === undefined ? {} : { providerOptions };
 }

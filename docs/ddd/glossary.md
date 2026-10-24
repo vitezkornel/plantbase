@@ -47,14 +47,14 @@
 
 ## Tudásbázis
 
-| Fogalom                | Kód              | DB                 | Jelentés / megengedett értékek                                                                                                      |
-| ---------------------- | ---------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Tudásbázis-cikkrészlet | `KnowledgeChunk` | `knowledge_chunks` | Növénygondozási cikk egy szakasza.                                                                                                  |
-| Cikk címe              | `title`          | `title`            | A válaszban forrásként idézendő.                                                                                                    |
-| Forrás                 | `source`         | `source`           | A cikk URL-je. Írásos válaszban a cím és az URL is idézendő; felolvasott (voice) válaszban az URL nem hangzik el, a cikk címe igen. |
+| Fogalom                | Kód              | DB                 | Jelentés / megengedett értékek                                                                                                                  |
+| ---------------------- | ---------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tudásbázis-cikkrészlet | `KnowledgeChunk` | `knowledge_chunks` | Növénygondozási cikk egy szakasza.                                                                                                              |
+| Cikk címe              | `title`          | `title`            | A válaszban forrásként idézendő.                                                                                                                |
+| Forrás                 | `source`         | `source`           | A cikk URL-je. Írásos válaszban a cím és az URL is idézendő; felolvasott (voice, voice-live) válaszban az URL nem hangzik el, a cikk címe igen. |
 
 ## Eszkaláció
 
-| Fogalom    | Kód                         | DB  | Jelentés / megengedett értékek                                                                                              |
-| ---------- | --------------------------- | --- | --------------------------------------------------------------------------------------------------------------------------- |
-| Eszkaláció | `[ESCALATE] ` válasz-prefix | –   | Kollégához irányítás: rendelés, szállítás, számlázás, visszáru, reklamáció, vagy ha a tudásbázisban nincs releváns találat. |
+| Fogalom    | Kód                         | DB  | Jelentés / megengedett értékek                                                                                                                                                                                                                                                                                                            |
+| ---------- | --------------------------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eszkaláció | `[ESCALATE] ` válasz-prefix | –   | Kollégához irányítás: rendelés, szállítás, számlázás, visszáru, reklamáció, vagy ha a tudásbázisban nincs releváns találat. Az ask-agentnél kivétel nincs. A `/voice/live` hangasszisztense a `VOICE_DEMO_ORDERS=1` demó-eszközből (`getOrderStatus`) kitalált rendelési adatot mondhat, és ezt ki kell mondania; ez nem valódi rendelés. |
