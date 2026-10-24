@@ -487,3 +487,87 @@ describe('createLiveSession — response.create race and rejection', () => {
     h.session.dispose();
   });
 });
+
+describe('createLiveSession — what the event log shows', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const lineOf = (emitted: LiveAction[], kind: string) =>
+    logs(emitted).find((l) => l.kind === kind)?.text;
+
+  it('should show the approximate user transcript', () => {
+    const h = setup();
+
+    h.session.onEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Milyen kaktuszaitok vannak?',
+    });
+
+    expect(lineOf(h.emitted, 'user')).toBe(
+      'TE (közelítő): Milyen kaktuszaitok vannak?',
+    );
+    h.session.dispose();
+  });
+
+  it('should show the question handed to the supervisor', () => {
+    const h = setup();
+
+    h.session.onEvent(askCall('Milyen kaktuszok vannak?'));
+
+    expect(lineOf(h.emitted, 'question')).toBe(
+      'Kérdés a supervisornak: Milyen kaktuszok vannak?',
+    );
+    h.session.dispose();
+  });
+
+  it('should not show a question line for malformed arguments', () => {
+    const h = setup();
+
+    h.session.onEvent({
+      type: 'response.function_call_arguments.done',
+      call_id: 'c1',
+      name: 'askPlantbase',
+      arguments: 'not json',
+    });
+
+    expect(lineOf(h.emitted, 'question')).toBeUndefined();
+    h.session.dispose();
+  });
+
+  it('should show the supervisor answer briefly', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+
+    h.resolveNext({ answer: 'x'.repeat(500), escalated: false });
+    await flush();
+
+    const text = lineOf(h.emitted, 'answer') ?? '';
+    expect(text.startsWith('Supervisor válasza: xxx')).toBe(true);
+    expect(text.length).toBeLessThan(260);
+    expect(text.endsWith('…')).toBe(true);
+    h.session.dispose();
+  });
+
+  it('should show a short supervisor answer in full', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+
+    h.resolveNext({ answer: 'Könnyű.', escalated: false });
+    await flush();
+
+    expect(lineOf(h.emitted, 'answer')).toBe('Supervisor válasza: Könnyű.');
+    h.session.dispose();
+  });
+
+  it('should show what the assistant said once no tool call is pending', () => {
+    const h = setup();
+
+    h.session.onEvent({
+      type: 'response.output_audio_transcript.done',
+      transcript: 'A pothos könnyű.',
+    });
+
+    expect(lineOf(h.emitted, 'assistant')).toBe('Asszisztens: A pothos könnyű.');
+    h.session.dispose();
+  });
+});

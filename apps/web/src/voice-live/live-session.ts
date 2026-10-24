@@ -23,6 +23,7 @@ import { ASK_PLANTBASE_TOOL_NAME } from './realtime-tools';
 import { createSilenceMeter, type SilenceMeasurement } from './silence-meter';
 import {
   createToolDispatcher,
+  parseQuestion,
   type DispatchInfo,
   type SupervisorResult,
 } from './tool-dispatch';
@@ -54,6 +55,14 @@ export interface LiveSession {
 // How long to wait before re-sending an answer the API refused as concurrent
 // when no response.done is known to be coming.
 const ANSWER_RETRY_MS = 400;
+
+// The on-screen log shows the supervisor's answer briefly (text stays on the
+// user's screen; nothing here reaches the operational log).
+const BRIEF_ANSWER_CHARS = 200;
+const brief = (text: string): string =>
+  text.length <= BRIEF_ANSWER_CHARS
+    ? text
+    : `${text.slice(0, BRIEF_ANSWER_CHARS)}…`;
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`;
 
@@ -142,6 +151,9 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
       return;
     }
     log('supervisor', `${info.name}: válasz ${seconds(info.ms)}`, info.demo);
+    if (info.answer !== undefined) {
+      log('answer', `Supervisor válasza: ${brief(info.answer)}`, info.demo);
+    }
     deps.emit({ type: 'new-answer' });
     if (info.escalated) {
       deps.emit({ type: 'escalated' });
@@ -249,6 +261,12 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         `Tool-hívás: ${call.name}`,
         call.name !== ASK_PLANTBASE_TOOL_NAME,
       );
+      if (call.name === ASK_PLANTBASE_TOOL_NAME) {
+        const question = parseQuestion(call.rawArguments);
+        if (question !== null) {
+          log('question', `Kérdés a supervisornak: ${question}`);
+        }
+      }
       if (deps.filler && call.name === ASK_PLANTBASE_TOOL_NAME) {
         nudge.start();
       }
@@ -278,6 +296,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     const userText = userTranscriptOf(event);
     if (userText !== null) {
       lastUserTranscript = userText.slice(0, 500);
+      log('user', `TE (közelítő): ${userText}`);
       deps.emit({
         type: 'turn',
         turn: { role: 'user', text: userText, approximate: true },
@@ -289,6 +308,8 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     if (agentText !== null) {
       if (toolPending) {
         log('filler', `Filler: ${agentText}`);
+      } else {
+        log('assistant', `Asszisztens: ${agentText}`);
       }
       deps.emit({
         type: 'turn',

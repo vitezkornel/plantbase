@@ -23,6 +23,8 @@ export interface DispatchInfo {
   ms: number;
   escalated: boolean;
   demo: boolean;
+  /** The supervisor's answer, for the on-screen event log only. */
+  answer?: string;
 }
 
 export interface DispatchDeps {
@@ -61,7 +63,7 @@ interface InFlight {
   abort: () => void;
 }
 
-function parseQuestion(rawArguments: string): string | null {
+export function parseQuestion(rawArguments: string): string | null {
   try {
     const parsed: unknown = JSON.parse(rawArguments);
     if (
@@ -99,6 +101,7 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
     entry: InFlight,
     outcome: DispatchInfo['outcome'],
     escalated = false,
+    answer?: string,
   ): void => {
     inFlight.delete(entry.call.callId);
     deps.onSettled({
@@ -108,6 +111,7 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
       ms: now() - entry.startedAt,
       escalated,
       demo: entry.demo,
+      ...(answer === undefined ? {} : { answer }),
     });
   };
 
@@ -152,7 +156,7 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
         }
         sendOutput(call.callId, result);
         deps.send({ type: 'response.create' });
-        settle(entry, 'answered', result.escalated);
+        settle(entry, 'answered', result.escalated, result.answer);
       },
       () => {
         if (!inFlight.has(call.callId)) {
