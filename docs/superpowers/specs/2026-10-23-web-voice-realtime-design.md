@@ -147,6 +147,15 @@ Csak esemény + ms + `safeErrorFields` (hibanév + státusz). Események: `api_v
 - A supervisor időkorlátját a handler maga érvényesíti (az ügynök a jelet nem feltétlenül tartja tiszteletben), és minden kilépési ág naplóz (`supervisor_done` / `_aborted` / `_timeout` / `_failed`), így napló nélküli hívás nem lehet.
 - A 2.1 modell elérhetősége és paraméterei változhatnak; az env-felülírás és a tartalék ezt kezeli.
 
+### 8.1 Tanulságok a kézi próbából (2026-10-24)
+
+- **A realtime modell magyar beszédértése gyenge, a gpt-transcribe jó.** Öt hívásból ötször a bemeneti átirat pontos volt, a modell saját `question`-je ötből nullaszor (a kaktusz helyett fotós tartozék, fali polc, locsolás lett). A persona szűkítése és a szabályok pontosítása nem oldotta meg. Ezért: **a supervisor az átiratból dolgozik** (5.2), a modell kérdése csak címkézett segítség, és a modell a `userQuestion` alapján mondja ki a választ — ha a válasz más témájú, mint amire gondolt, a supervisornak van igaza. Így a követő kérdések (kaktusz → macskabarát → öntözés) a modell félreértése ellenére jók lettek.
+- **Nyitott lehetőségek:** (1) *átirat-kapuzott válasz*: `create_response: false`, és a kliens az átiratot szövegként adja a modellnek, majd a végén maga kéri a választ; ~1–1,5 s plusz késés, de a modell soha nem hallja félre a kérdést. (2) más realtime modell kipróbálása a magyar beszédértés miatt.
+- **Versenyhelyzet a `response.create` körül.** A foglalt állapotot a `response.created` helyett már a küldéskor be kell állítani, és az API `conversation_already_has_active_response` elutasítását kezelni kell (újrasorba állítás), különben a tool-eredmény elveszhet. Élőben előjött, javítva.
+- **A thinking és a prompt caching dönt a késésen.** A supervisor 9,3–17,5 s-ról ~5,6–6,1 s-ra gyorsult (`VOICE_THINKING=off` + cache-jelölt system prompt).
+- **Dev-jelenség:** az első kérésnél a route fordítása ~7–10 s többletet ad; produkciós buildben ez nincs meg.
+- **Fantomkérdés zajból** (lásd fent): az instructions-javításokkal a próbán nem jött elő, de nem determinisztikus.
+
 ## 9. Commitok
 
 Conventional Commits, feature branch, explicit útvonalú `git add` (a `.env`-hez és a követetlen `docs/projekt-statusz.md`-hez nem nyúlunk): spec → terv → core log-mező és mód → szerver (config, instructions, store, handlerek) → kliens tiszta logika → UI → doksi (`.env.example`, `README.md`, `CLAUDE.md` `apps/web` bekezdés). Új MCP-szerver nincs (`.mcp.json.example` változatlan); a `docs/system-prompt.md` nem változik, így mirror-teher sincs. Push és PR csak külön jóváhagyással.
