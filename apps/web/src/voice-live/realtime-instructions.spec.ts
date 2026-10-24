@@ -6,6 +6,15 @@ describe('realtimeInstructions', () => {
   const on = realtimeInstructions(true);
   const off = realtimeInstructions(false);
 
+  it('should be a plant catalogue advisor, not an interior designer', () => {
+    expect(on).toContain('Plantbase növénykatalógus-tanácsadója');
+    expect(on).not.toContain('lakberendez');
+  });
+
+  it('should ask back when it is unsure what the user said', () => {
+    expect(on).toMatch(/bizonytalan vagy, mit mondott a felhasználó[^.]*kérdezz vissza/);
+  });
+
   it('should require Hungarian answers', () => {
     expect(on).toContain('mindig magyarul');
   });
