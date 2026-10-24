@@ -102,4 +102,4 @@ products (
 </examples>
 ```
 
-> **Voice mód:** a `/voice` oldal (`streamAskAgent(..., { mode: 'voice' })`) ehhez a prompthoz még hozzáfűzi a `<voice>` szekciót; annak szövege nem itt, hanem a `packages/core/src/agents/ask-agent/voice-prompt.ts` `VOICE_PROMPT_SECTION` konstansában él (így nincs új szinkron-teher).
+> **Voice mód:** a `/voice` oldal (`streamAskAgent(..., { mode: 'voice' })`) ehhez a prompthoz még hozzáfűzi a `<voice>` szekciót; annak szövege nem itt, hanem a `packages/core/src/agents/ask-agent/voice-prompt.ts` `VOICE_PROMPT_SECTION` konstansában él (így nincs új szinkron-teher). A `voice-live` mód (a `/voice/live` supervisor-hívása) ezen felül a `VOICE_LIVE_PROMPT_SECTION`-t kapja, ugyanott. **Szinkron:** az eszkalációs téma-lista a `docs/ddd/glossary.md` Eszkaláció sorában és az `apps/web/src/voice-live/realtime-instructions.ts` 7. szabályában is szerepel — együtt módosítandó.

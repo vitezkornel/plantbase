@@ -133,21 +133,22 @@ A `pnpm nx dev web` után a `http://localhost:3001/voice` oldalon nyomva tartott
 
 ### Élő változat (`/voice/live`)
 
-A `http://localhost:3001/voice/live` oldalon a böngésző WebRTC-n közvetlenül az OpenAI Realtime API-hoz kapcsolódik (a szerver csak egy 60 s-os ephemeral tokent ad), és kapcsolódás után szabadon lehet magyarul beszélni. A tartalmat egyetlen `askPlantbase` tool hozza: a `POST /api/voice/supervisor` a meglévő ask-agentet futtatja `voice-live` módban. Az eseménylog mutatja a közbevágást, a tool-hívást, a fillert és a kétféle csendet (beszéd végétől / tool-hívástól). **Fülhallgató ajánlott**, különben a hangszóróból visszajövő hang hamis közbevágást okoz.
+A `http://localhost:3001/voice/live` oldalon a böngésző WebRTC-n közvetlenül az OpenAI Realtime API-hoz kapcsolódik (a szerver csak egy 60 s-os ephemeral tokent ad), és kapcsolódás után szabadon lehet magyarul beszélni. A tartalmat egyetlen `askPlantbase` tool hozza: a `POST /api/voice/supervisor` a meglévő ask-agentet futtatja `voice-live` módban. A supervisor a gpt-transcribe átiratokból dolgozik (a felhasználó utolsó ≤ 6 átirata), a realtime modell saját kérdése csak címkézett segítség — a mérések szerint a modell magyar beszédértése gyenge. Az eseménylog mutatja a közbevágást, a tool-hívást, az átiratot és a kérdéseket, a fillert, a kétféle csendet (beszéd végétől / tool-hívástól) és a részidőket. **Fülhallgató ajánlott**, különben a hangszóróból visszajövő hang hamis közbevágást okoz.
 
 - **Szükséges:** `OPENAI_API_KEY` (csak szerveren).
-- **Opcionális:** `VOICE_REALTIME_MODEL`, `VOICE_REALTIME_FALLBACK_MODEL`, `VOICE_REALTIME_REASONING_EFFORT`, `VOICE_REALTIME_VOICE` (lásd `.env.example`); `VOICE_DEMO_ORDERS=1` bekapcsolja a kitalált, `DEMO`-val jelölt `getOrderStatus` toolt (6 s késleltetéssel).
+- **Opcionális:** `VOICE_REALTIME_MODEL`, `VOICE_REALTIME_FALLBACK_MODEL`, `VOICE_REALTIME_REASONING_EFFORT`, `VOICE_REALTIME_VOICE` (lásd `.env.example`); `VOICE_THINKING` (alap: `off`) a supervisor (és a `/voice`) modelljének gondolkodását kapcsolja ki a késleltetés miatt (`off` | `low` | `medium` | `high` | `default`; a szöveges chatre nincs hatása); `VOICE_DEMO_ORDERS=1` bekapcsolja a kitalált, `DEMO`-val jelölt `getOrderStatus` toolt (6 s késleltetéssel).
+- **Késleltetés:** a supervisor ~5,6–6,1 s (thinking kikapcsolva + prompt caching után), beszédvégtől első hangig ~0,3–0,5 s; dev módban az első kérésnél a route-fordítás ~7–10 s többletet ad. Lásd [`docs/voice-meresek.md`](docs/voice-meresek.md).
 - **Kézi ellenőrzés:** [`docs/voice-live-kezi-ellenorzes.md`](docs/voice-live-kezi-ellenorzes.md).
 
 ## Architektúra
 
 Nx monorepo (pnpm), öt projekt:
 
-- **`packages/core`** — az agent-logika: `agents/ask-agent` (system prompt + agent-loop), `tools/run-sql` és `tools/list-categories` (a két, agentnek regisztrált tool), közös kód (`tool-outcome.ts`, `readonly-db-client.ts`) egy szinttel feljebb.
+- **`packages/core`** — az agent-logika: `agents/ask-agent` (system prompt + agent-loop), `tools/run-sql` és `tools/list-categories` (a két, agentnek regisztrált tool), közös kód (`tool-outcome.ts`, `readonly-db-client.ts`, időkorlátokkal) egy szinttel feljebb. Az ask-agent kimenetét a `voice` és `voice-live` módok beszélt válaszra szabják (`voice-prompt.ts`), a hangmódokban a modell gondolkodása ki van kapcsolva, a system prompt és a tool-definíciók pedig Anthropic prompt cache-t kapnak.
 - **`packages/db`** — Prisma séma, migráció, seed; a **read-write** DB-kapcsolatot birtokolja (a `products` katalógus és a RAG `knowledge_chunks` táblája is itt kap sémát).
 - **`packages/rag`** — a RAG-tudásbázis ingest-oldala: cikk-parsolás, boilerplate-szűrés, heading-alapú chunkolás, Cohere embedding, pgvector-írás. Lásd `docs/rag-proposal.md`.
 - **`apps/cli`** — a parancssori felület (commander), csak I/O-réteg `packages/core` felett.
-- **`apps/web`** — Next.js chat felület (`/`) és hangos felület (`/voice`) az ask-agent streamelő belépésére kötve.
+- **`apps/web`** — Next.js chat felület (`/`), nyomva-tartós hangos felület (`/voice`) és élő realtime hangos felület (`/voice/live`) az ask-agent streamelő belépésére kötve.
 - **`apps/customer-chat`** — minimális, ügyfél felé forduló webes chat demo (PoC), (PoC, nincs hozzá build-target) amely a `packages/core` `askAgent`-jét emberi jóváhagyási ponttal (eszkalációval) egészíti ki. Lásd [`apps/customer-chat/README.md`](apps/customer-chat/README.md).
 
 **Két DB-kapcsolat, két jog**: `DATABASE_URL` (read-write, Prisma migrate/seed, `packages/db`) és `DATABASE_URL_READONLY` (csak SELECT, a `plantbase_readonly` role-lal, közvetlen `pg` klienssel — NEM Prismán keresztül — az agent `runSql`/`listCategories` toolja ezt használja). A kettő szándékosan el van választva: az agentnek fizikailag nincs lehetősége írni az adatbázisba, még egy prompt-injection vagy guard-hiba esetén sem.
