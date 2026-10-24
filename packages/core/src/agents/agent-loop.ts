@@ -7,6 +7,7 @@ import {
   type ToolSet,
 } from 'ai';
 import type { ToolOutcome } from '../tools/tool-outcome.js';
+import { cachedSystemMessage } from './prompt-cache.js';
 
 // Shared loop core (konvenciok.md: "a közös kód eggyel kintebb lakik" —
 // this sits one directory above any specific agent, e.g. `ask-agent/`).
@@ -89,8 +90,9 @@ export async function runAgentLoop(
 
   const result = await generateText({
     model,
-    system,
-    messages,
+    messages: [cachedSystemMessage(system), ...messages],
+    // The only system message is our own cached prompt (see prompt-cache.ts).
+    allowSystemInMessages: true,
     tools,
     maxOutputTokens: maxTokens,
     // The unknown-tool condition stops the loop right after the offending

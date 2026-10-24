@@ -199,6 +199,7 @@ describe('streamAskAgent', () => {
     expect(model.doStreamCalls[0].prompt[0]).toEqual({
       role: 'system',
       content: ASK_AGENT_SYSTEM_PROMPT,
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
     });
 
     await rm(logPath, { force: true });

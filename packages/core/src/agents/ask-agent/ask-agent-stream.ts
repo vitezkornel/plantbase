@@ -44,6 +44,7 @@ import {
   type AskAgentTools,
 } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
+import { cachedSystemMessage } from '../prompt-cache.js';
 import { anthropicOptionsFor } from './model-options.js';
 import {
   VOICE_LIVE_PROMPT_SECTION,
@@ -129,8 +130,10 @@ export function streamAskAgent(
 
   return streamText({
     model: options.model ?? anthropic(MODEL_ID),
-    system,
-    messages,
+    messages: [cachedSystemMessage(system), ...messages],
+    // Only our own (cached) system message is in `messages`: the input schema
+    // rejects any client-sent system message.
+    allowSystemInMessages: true,
     tools: ASK_AGENT_TOOLS,
     maxOutputTokens: MAX_TOKENS,
     stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
