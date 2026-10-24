@@ -47,7 +47,7 @@ async function callSupervisor(
   sessionId: string,
   question: string,
   signal: AbortSignal,
-  approxTranscript: string | undefined,
+  transcripts: readonly string[],
 ): Promise<SupervisorResult> {
   const response = await fetch('/api/voice/supervisor', {
     method: 'POST',
@@ -55,7 +55,7 @@ async function callSupervisor(
     body: JSON.stringify({
       sessionId,
       question: clampQuestion(question),
-      ...(approxTranscript === undefined ? {} : { approxTranscript }),
+      ...(transcripts.length === 0 ? {} : { transcripts }),
     }),
     signal,
   });
@@ -112,8 +112,8 @@ export function useLiveVoice() {
           filler: nextFiller,
           demoOrders: minted.demoOrders,
           send: outbox.send,
-          fetchSupervisor: (question, signal, approx) =>
-            callSupervisor(minted.sessionId, question, signal, approx),
+          fetchSupervisor: (question, signal, said) =>
+            callSupervisor(minted.sessionId, question, signal, said),
           emit: dispatch,
           onAutoDisconnect: (reason) => {
             dispatch({

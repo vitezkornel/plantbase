@@ -88,9 +88,9 @@ export async function handleSupervisorRequest(
     const text = await Promise.race([
       ask({
         question: parsed.question,
-        ...(parsed.approxTranscript === undefined
+        ...(parsed.transcripts === undefined
           ? {}
-          : { clientTranscript: parsed.approxTranscript }),
+          : { transcripts: parsed.transcripts }),
         signal,
       }),
       rejectOnAbort(signal),

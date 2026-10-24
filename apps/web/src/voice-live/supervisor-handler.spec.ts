@@ -48,6 +48,32 @@ describe('handleSupervisorRequest', () => {
     expect(run.mock.calls[0][0].question).toBe('Mi a pothos?');
   });
 
+  it('should hand the transcripts to the agent', async () => {
+    const run = ask('x');
+
+    await handleSupervisorRequest(
+      post({ sessionId, question: 'k', transcripts: ['Szia!', 'Milyen kaktuszaitok vannak?'] }),
+      run,
+    );
+
+    expect(run.mock.calls[0][0].transcripts).toEqual([
+      'Szia!',
+      'Milyen kaktuszaitok vannak?',
+    ]);
+  });
+
+  it('should refuse the old approxTranscript field', async () => {
+    const run = ask('x');
+
+    const response = await handleSupervisorRequest(
+      post({ sessionId, question: 'k', approxTranscript: 'régi' }),
+      run,
+    );
+
+    expect(response.status).toBe(400);
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('should strip the escalation prefix and flag it', async () => {
     const response = await handleSupervisorRequest(
       post({ sessionId, question: 'Hol a rendelésem?' }),
@@ -67,21 +93,6 @@ describe('handleSupervisorRequest', () => {
     );
 
     expect((await response.json()).answer.length).toBeLessThanOrEqual(1200);
-  });
-
-  it('should pass the approximate transcript on for logging only', async () => {
-    const run = ask('ok');
-
-    await handleSupervisorRequest(
-      post({
-        sessionId,
-        question: 'Mi a pothos?',
-        approxTranscript: 'mi a potosz',
-      }),
-      run,
-    );
-
-    expect(run.mock.calls[0][0].clientTranscript).toBe('mi a potosz');
   });
 
   it.each([undefined, 'not-a-known-session'])(

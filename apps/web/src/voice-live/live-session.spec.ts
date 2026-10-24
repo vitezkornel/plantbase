@@ -16,16 +16,16 @@ function setup(over: Partial<LiveSessionDeps> = {}) {
   let clock = 0;
   const signals: AbortSignal[] = [];
   const pending: Array<(r: SupervisorResult) => void> = [];
-  const approx: Array<string | undefined> = [];
+  const transcripts: string[][] = [];
   const deps: LiveSessionDeps = {
     sessionId: 's1',
     filler: true,
     demoOrders: false,
     send: (e) => sent.push(e),
-    fetchSupervisor: (_q, signal, approxTranscript) =>
+    fetchSupervisor: (_q, signal, seenTranscripts) =>
       new Promise((resolve, reject) => {
         signals.push(signal);
-        approx.push(approxTranscript);
+        transcripts.push([...seenTranscripts]);
         pending.push(resolve);
         signal.addEventListener('abort', () => reject(new Error('aborted')));
       }),
@@ -42,7 +42,7 @@ function setup(over: Partial<LiveSessionDeps> = {}) {
     emitted,
     disconnects,
     signals,
-    approx,
+    transcripts,
     resolveNext: (r: SupervisorResult) => pending.shift()?.(r),
     advance: (ms: number) => {
       clock += ms;
@@ -149,7 +149,7 @@ describe('createLiveSession', () => {
     h.session.dispose();
   });
 
-  it('should run a tool call end to end, passing the latest approximate transcript along', async () => {
+  it('should run a tool call end to end, passing the approximate transcripts along', async () => {
     const h = setup();
     h.session.onEvent({
       type: 'conversation.item.input_audio_transcription.completed',
@@ -160,7 +160,7 @@ describe('createLiveSession', () => {
     h.resolveNext({ answer: 'Könnyű.', escalated: false });
     await flush();
 
-    expect(h.approx).toEqual(['mi a potosz']);
+    expect(h.transcripts).toEqual([['mi a potosz']]);
     expect(h.sent.at(-1)).toEqual({ type: 'response.create' });
     expect(kinds(h.emitted)).toContain('tool');
     expect(kinds(h.emitted)).toContain('supervisor');
@@ -568,6 +568,109 @@ describe('createLiveSession — what the event log shows', () => {
     });
 
     expect(lineOf(h.emitted, 'assistant')).toBe('Asszisztens: A pothos könnyű.');
+    h.session.dispose();
+  });
+});
+
+describe('createLiveSession — transcripts for the supervisor', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const said = (session: { onEvent(e: never): void }, transcript: string) =>
+    session.onEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript,
+    } as never);
+
+  it('should pass the last six transcripts, oldest first', async () => {
+    const h = setup();
+    for (let i = 1; i <= 8; i += 1) {
+      said(h.session, `mondat ${i}`);
+    }
+
+    h.session.onEvent(askCall());
+    await flush();
+
+    expect(h.transcripts[0]).toEqual([
+      'mondat 3',
+      'mondat 4',
+      'mondat 5',
+      'mondat 6',
+      'mondat 7',
+      'mondat 8',
+    ]);
+    h.session.dispose();
+  });
+
+  it('should wait for the transcript of the turn that just ended before asking', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'input_audio_buffer.speech_started' });
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent(askCall());
+    await flush();
+
+    expect(h.transcripts).toEqual([]);
+
+    said(h.session, 'Milyen kaktuszaitok vannak?');
+    await flush();
+
+    expect(h.transcripts).toEqual([['Milyen kaktuszaitok vannak?']]);
+    h.session.dispose();
+  });
+
+  it('should give up waiting after about a second and a half', async () => {
+    const h = setup();
+    said(h.session, 'korábbi mondat');
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent(askCall());
+
+    await vi.advanceTimersByTimeAsync(1400);
+    expect(h.transcripts).toEqual([]);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(h.transcripts).toEqual([['korábbi mondat']]);
+    h.session.dispose();
+  });
+
+  it('should not wait when the transcript has already arrived', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    said(h.session, 'Milyen kaktuszaitok vannak?');
+    h.session.onEvent(askCall());
+    await flush();
+
+    expect(h.transcripts).toEqual([['Milyen kaktuszaitok vannak?']]);
+    h.session.dispose();
+  });
+
+  it('should not ask the supervisor at all when the user speaks again while it waits', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent(askCall());
+
+    h.session.onEvent({ type: 'input_audio_buffer.speech_started' });
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(h.transcripts).toEqual([]);
+    h.session.dispose();
+  });
+
+  it('should not keep waiting for every later call after a transcript never came', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent(askCall());
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.transcripts).toHaveLength(1);
+
+    h.session.onEvent({
+      type: 'response.function_call_arguments.done',
+      call_id: 'c2',
+      name: 'askPlantbase',
+      arguments: JSON.stringify({ question: 'újra' }),
+    });
+    await flush();
+
+    expect(h.transcripts).toHaveLength(2);
     h.session.dispose();
   });
 });

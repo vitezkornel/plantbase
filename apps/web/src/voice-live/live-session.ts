@@ -36,7 +36,7 @@ export interface LiveSessionDeps {
   fetchSupervisor(
     question: string,
     signal: AbortSignal,
-    approxTranscript: string | undefined,
+    transcripts: readonly string[],
   ): Promise<SupervisorResult>;
   emit(action: LiveAction): void;
   onAutoDisconnect(reason: 'idle' | 'max-duration'): void;
@@ -56,6 +56,11 @@ export interface LiveSession {
 // when no response.done is known to be coming.
 const ANSWER_RETRY_MS = 400;
 
+// Mirrors supervisor-schema.ts (count and length of the transcripts sent).
+const MAX_TRANSCRIPTS = 6;
+const MAX_TRANSCRIPT_CHARS = 500;
+const TRANSCRIPT_WAIT_MS = 1500;
+
 // The on-screen log shows the supervisor's answer briefly (text stays on the
 // user's screen; nothing here reaches the operational log).
 const BRIEF_ANSWER_CHARS = 200;
@@ -72,7 +77,38 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   let disposed = false;
   let responding = false;
   let toolPending = false;
-  let lastUserTranscript: string | undefined;
+  // The user's last approximate transcripts (oldest first) go to the
+  // supervisor; the transcript of the turn that just ended can lag behind the
+  // tool call, so a call waits for it a moment.
+  const transcripts: string[] = [];
+  let transcriptPending = false;
+  const transcriptWaiters = new Set<() => void>();
+  const awaitTranscript = (signal: AbortSignal): Promise<void> => {
+    if (!transcriptPending) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        transcriptPending = false; // none is coming: later calls do not wait
+        wake();
+      }, TRANSCRIPT_WAIT_MS);
+      function release(): void {
+        clearTimeout(timer);
+        transcriptWaiters.delete(wake);
+        signal.removeEventListener('abort', onAbort);
+      }
+      function wake(): void {
+        release();
+        resolve();
+      }
+      function onAbort(): void {
+        release();
+        reject(new Error('aborted'));
+      }
+      transcriptWaiters.add(wake);
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  };
   // A tool result's response.create that arrived while a response was still
   // active: the API refuses a second concurrent response, so it waits for
   // response.done (and is dropped if the user starts talking first).
@@ -161,8 +197,14 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   };
 
   const dispatcher = createToolDispatcher({
-    fetchSupervisor: (question, signal) =>
-      deps.fetchSupervisor(question, signal, lastUserTranscript),
+    fetchSupervisor: (question, signal) => {
+      const ask = (): Promise<SupervisorResult> =>
+        deps.fetchSupervisor(question, signal, [...transcripts]);
+      // No pending transcript: ask at once, without an extra tick.
+      return transcriptPending
+        ? awaitTranscript(signal).then(ask)
+        : ask();
+    },
     send: (event) => {
       if ('type' in event && event.type === 'response.create') {
         if (busy()) {
@@ -210,6 +252,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         return;
       case 'input_audio_buffer.speech_stopped':
         log('end-of-turn', 'Beszéd vége (end-of-turn)');
+        transcriptPending = true;
         meter.speechStopped(now());
         return;
       case 'response.created':
@@ -295,7 +338,12 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
 
     const userText = userTranscriptOf(event);
     if (userText !== null) {
-      lastUserTranscript = userText.slice(0, 500);
+      transcripts.push(userText.slice(0, MAX_TRANSCRIPT_CHARS));
+      transcripts.splice(0, Math.max(0, transcripts.length - MAX_TRANSCRIPTS));
+      transcriptPending = false;
+      for (const wake of [...transcriptWaiters]) {
+        wake();
+      }
       log('user', `TE (közelítő): ${userText}`);
       deps.emit({
         type: 'turn',

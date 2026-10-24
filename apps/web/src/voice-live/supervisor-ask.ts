@@ -4,22 +4,27 @@
 // for the JSONL log only; it never reaches the model.
 
 import { streamAskAgent } from 'core';
+import { buildSupervisorMessages } from './supervisor-messages';
 
 export interface AskInput {
   question: string;
-  clientTranscript?: string;
+  transcripts?: readonly string[];
   signal: AbortSignal;
 }
 
 export async function askSupervisor({
   question,
-  clientTranscript,
+  transcripts,
   signal,
 }: AskInput): Promise<string> {
-  const result = streamAskAgent([{ role: 'user', content: question }], {
-    mode: 'voice-live',
-    abortSignal: signal,
-    ...(clientTranscript === undefined ? {} : { clientTranscript }),
-  });
+  const clientTranscript = transcripts?.at(-1);
+  const result = streamAskAgent(
+    buildSupervisorMessages({ question, transcripts }),
+    {
+      mode: 'voice-live',
+      abortSignal: signal,
+      ...(clientTranscript === undefined ? {} : { clientTranscript }),
+    },
+  );
   return await result.text;
 }
