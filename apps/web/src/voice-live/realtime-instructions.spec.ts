@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { realtimeInstructions } from './realtime-instructions';
+import { ASK_PLANTBASE_TOOL } from './realtime-tools';
 
 describe('realtimeInstructions', () => {
   const on = realtimeInstructions(true);
@@ -17,6 +18,30 @@ describe('realtimeInstructions', () => {
   it('should demand a self-contained question for askPlantbase', () => {
     expect(on).toContain('önállóan érthető');
     expect(on).toContain('Melyik kaktusz háziállat-barát?');
+  });
+
+  it('should not call askPlantbase for noise, a cough or an unintelligible utterance', () => {
+    expect(on).toMatch(/köhögés[\s\S]*nevetés[\s\S]*háttérzaj/);
+    expect(on).toMatch(/NE hívd meg az askPlantbase/);
+    expect(on).toMatch(/röviden kérdezz vissza/);
+  });
+
+  it('should keep the question to the user’s own words and topic', () => {
+    expect(on).toMatch(/kulcsszavakat[^.]*szó szerint/);
+    expect(on).toMatch(/ne adj hozzá olyan témát, amit a felhasználó nem mondott/);
+  });
+
+  it('should take the topic of a correction or short follow-up from the user’s earlier words', () => {
+    expect(on).toMatch(/javításnál vagy rövid kérdésnél/i);
+    expect(on).toMatch(/ne a saját korábbi kérdésedből vagy válaszodból/);
+  });
+
+  it('should no longer ask to copy the whole earlier context into the question', () => {
+    expect(on).not.toContain('írd bele a korábbi kontextust');
+    expect(ASK_PLANTBASE_TOOL.description).not.toContain('korábbi kontextussal');
+    expect(ASK_PLANTBASE_TOOL.parameters.properties.question.description).not.toContain(
+      'korábbi kontextussal',
+    );
   });
 
   it('should demand a faithful relay of name, price and source title', () => {

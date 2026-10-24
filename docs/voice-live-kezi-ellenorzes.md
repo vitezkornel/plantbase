@@ -28,3 +28,5 @@ A KI/BE különbség a (b) oszlopban látszik.
 - [ ] VAD/filler váltás újrakapcsolódik, az előzmény megmarad (a seed a data channel megnyitásáig pufferelve van)
 - [ ] 5 perc tétlenség után automatikus bontás; oldal elhagyásakor a mikrofon-jelző kialszik
 - [ ] átirat-minőség: a „közelítő átirat” a JSONL `clientTranscript`-ben vs. a modell megfogalmazása (`messages`)
+- [ ] fantomkérdés: köhögés / nevetés / háttérzaj közben nincs askPlantbase-hívás (az eseménylogban nincs „Tool-hívás”), a modell legfeljebb röviden visszakérdez; ismételd server_vad és semantic_vad mellett is
+- [ ] javító mondat („de én növényt kérdeztem”): a supervisornak szóló kérdés a korábbi témát viszi, nem a modell előző kérdését

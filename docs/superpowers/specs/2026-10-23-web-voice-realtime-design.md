@@ -139,6 +139,8 @@ Csak esemény + ms + `safeErrorFields` (hibanév + státusz). Események: `api_v
 - A realtime átirat közelítés (a demóban a cascade a magyart délszlávnak hallotta): nem használjuk tényforrásként, csak naplóban és UI-n.
 - A böngésző közvetlenül a `api.openai.com`-hoz kapcsolódik; a CSP/hálózati szabályoknak ezt engedni kell.
 - Az ephemeral tokent a böngésző birtokolja: aki megszerzi (pl. a fejlesztői eszközökből), a session-t közvetlenül az OpenAI-nál is módosíthatja (pl. `session.update`). A fix `instructions` ezért azt garantálja, hogy **a mi szerverünk** nem fogad el kliens-szöveget, nem azt, hogy a session tartalma kliensoldalról hamisíthatatlan. A tokent 60 s után nem lehet új session-re használni; a költséget az idle/plafon és az OpenAI-oldali korlátok fékezik.
+- **Fantomkérdés zajból:** a server VAD a köhögést, nevetést és háttérzajt beszédnek veszi, és a realtime modell ebből kitalálhat egy kérdést (a 2026-10-24-i kézi próbán egy köhögésből fotós termékekre vonatkozó `askPlantbase`-kérdés lett, amit a modell a következő fordulókba is áthúzott). Nem determinisztikus: egy második köhögésből nem lett tool-hívás. Mérséklés: az instructions tiltja a tool-hívást zajra és érthetetlen beszédre, és előírja, hogy a kérdés a felhasználó saját szavait kövesse; a `semantic_vad` is csökkentheti, mert a beszéd tartalmát is figyeli, ez a kézi mérésben összehasonlítandó. Teljesen nem zárható ki.
+- A supervisor időkorlátját a handler maga érvényesíti (az ügynök a jelet nem feltétlenül tartja tiszteletben), és minden kilépési ág naplóz (`supervisor_done` / `_aborted` / `_timeout` / `_failed`), így napló nélküli hívás nem lehet.
 - A 2.1 modell elérhetősége és paraméterei változhatnak; az env-felülírás és a tartalék ezt kezeli.
 
 ## 9. Commitok

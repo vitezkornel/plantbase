@@ -10,14 +10,16 @@ export const ASK_PLANTBASE_TOOL = {
   description:
     'A Plantbase szakértőjét kérdezi: növénykatalógus (termék, ár, készlet, ' +
     'kategória) és gondozási tudástár. Minden termék-, ár-, készlet- és ' +
-    'gondozási kérdéshez ezt használd. A kérdés önállóan érthető legyen.',
+    'gondozási kérdéshez ezt használd, de zajra, köhögésre vagy érthetetlen ' +
+    'beszédre ne. A kérdés önállóan érthető legyen, a felhasználó szavaival.',
   parameters: {
     type: 'object',
     properties: {
       question: {
         type: 'string',
         description:
-          'Önállóan érthető magyar kérdés, a korábbi kontextussal együtt.',
+          'Önállóan érthető magyar kérdés a felhasználó saját szavaival; a ' +
+          'kulcsszavakat szó szerint vidd át, új témát ne adj hozzá.',
       },
     },
     required: ['question'],
