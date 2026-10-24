@@ -44,6 +44,7 @@ import {
   type AskAgentTools,
 } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
+import { anthropicOptionsFor } from './model-options.js';
 import {
   VOICE_LIVE_PROMPT_SECTION,
   VOICE_PROMPT_SECTION,
@@ -134,6 +135,7 @@ export function streamAskAgent(
     maxOutputTokens: MAX_TOKENS,
     stopWhen: [stepCountIs(MAX_ITERATIONS), hasUnknownToolRequest],
     abortSignal: options.abortSignal,
+    ...providerOptionsFor(mode),
     onStepFinish: (step) => {
       finishedSteps = [...finishedSteps, step];
     },
@@ -242,4 +244,9 @@ function systemPromptFor(mode: AskAgentMode): string {
   return mode === 'voice-live'
     ? ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION + VOICE_LIVE_PROMPT_SECTION
     : ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION;
+}
+
+function providerOptionsFor(mode: AskAgentMode) {
+  const providerOptions = anthropicOptionsFor(mode);
+  return providerOptions === undefined ? {} : { providerOptions };
 }
