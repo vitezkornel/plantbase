@@ -30,6 +30,18 @@ const errors = {
 const fail = (message: string, status: number): Response =>
   Response.json({ error: message }, { status });
 
+function rejectOnAbort(signal: AbortSignal): Promise<never> {
+  return new Promise<never>((_resolve, reject) => {
+    const fail = (): void =>
+      reject(signal.reason instanceof Error ? signal.reason : new Error('aborted'));
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener('abort', fail, { once: true });
+  });
+}
+
 export async function handleSupervisorRequest(
   request: Request,
   ask: (input: AskInput) => Promise<string> = askSupervisor,
@@ -70,13 +82,19 @@ export async function handleSupervisorRequest(
   const signal = AbortSignal.any([request.signal, timeout.signal]);
   const startedAt = now();
   try {
-    const text = await ask({
-      question: parsed.question,
-      ...(parsed.approxTranscript === undefined
-        ? {}
-        : { clientTranscript: parsed.approxTranscript }),
-      signal,
-    });
+    // The abort signal is only a request to the agent: a hung tool or model
+    // call may never honour it, so the time limit and a client disconnect are
+    // enforced here by racing the agent against the signal.
+    const text = await Promise.race([
+      ask({
+        question: parsed.question,
+        ...(parsed.approxTranscript === undefined
+          ? {}
+          : { clientTranscript: parsed.approxTranscript }),
+        signal,
+      }),
+      rejectOnAbort(signal),
+    ]);
     // After an abort the SDK may resolve with the last closed step's text (or
     // nothing): that is a cut-off answer, never one to speak.
     if (signal.aborted || text.trim() === '') {
@@ -96,13 +114,14 @@ export async function handleSupervisorRequest(
     });
   } catch (error: unknown) {
     if (request.signal.aborted) {
-      logger.info('api_voice_live.supervisor_aborted');
+      logger.info('api_voice_live.supervisor_aborted', {
+        ms: now() - startedAt,
+      });
       return fail(errors.failed, 499);
     }
     if (timeout.signal.aborted) {
-      logger.error('api_voice_live.supervisor_failed', {
+      logger.error('api_voice_live.supervisor_timeout', {
         ms: now() - startedAt,
-        errorName: 'TimeoutError',
       });
       return fail(errors.timeout, 504);
     }

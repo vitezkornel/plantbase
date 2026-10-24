@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from 'core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearRateLimits } from './rate-limit';
 import { clearSessions, createSession } from './session-store';
 import {
@@ -297,4 +298,73 @@ describe('handleSupervisorRequest', () => {
     expect(response.status).toBe(502);
   });
 
+
+  describe('when the agent never settles and ignores the abort signal', () => {
+    const hung = () =>
+      vi.fn<(input: AskInput) => Promise<string>>(
+        () => new Promise<string>(() => undefined),
+      );
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('should still answer 504 at the time limit', async () => {
+      const response = await handleSupervisorRequest(
+        post({ sessionId, question: 'k' }),
+        hung(),
+        Date.now,
+        20,
+      );
+
+      expect(response.status).toBe(504);
+    });
+
+    it('should answer 499 at once when the client aborts', async () => {
+      const controller = new AbortController();
+      const pending = handleSupervisorRequest(
+        post({ sessionId, question: 'k' }, { signal: controller.signal }),
+        hung(),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      controller.abort();
+
+      expect((await pending).status).toBe(499);
+    });
+  });
+
+  describe('exit logging', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('should log supervisor_timeout with the elapsed ms', async () => {
+      const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+      await handleSupervisorRequest(
+        post({ sessionId, question: 'k' }),
+        vi.fn(() => new Promise<string>(() => undefined)),
+        Date.now,
+        20,
+      );
+
+      expect(error).toHaveBeenCalledWith(
+        'api_voice_live.supervisor_timeout',
+        expect.objectContaining({ ms: expect.any(Number) }),
+      );
+    });
+
+    it('should log supervisor_aborted with the elapsed ms', async () => {
+      const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+      const controller = new AbortController();
+      const pending = handleSupervisorRequest(
+        post({ sessionId, question: 'k' }, { signal: controller.signal }),
+        vi.fn(() => new Promise<string>(() => undefined)),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      controller.abort();
+      await pending;
+
+      expect(info).toHaveBeenCalledWith(
+        'api_voice_live.supervisor_aborted',
+        expect.objectContaining({ ms: expect.any(Number) }),
+      );
+    });
+  });
 });
