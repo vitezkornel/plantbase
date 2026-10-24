@@ -73,6 +73,14 @@ describe('realtimeInstructions', () => {
     expect(on).toMatch(/mondd ki hűen/);
   });
 
+  it('should say the supervisor answers the user’s real question and wins over the model’s own reading', () => {
+    expect(on).toMatch(/userQuestion[^.]*felhasználó pontos átirata/);
+    expect(on).toMatch(/más témájú[^.]*supervisornak van igaza/);
+    expect(on).toMatch(/hűen mondd ki/);
+    expect(on).toMatch(/ne mondd, hogy nem kaptál választ/);
+    expect(on).toMatch(/ne kommentáld az eltérést/);
+  });
+
   it('should hand escalated answers to a colleague', () => {
     expect(on).toContain('escalated');
     expect(on).toContain('kolléga');

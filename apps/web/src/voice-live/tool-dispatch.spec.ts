@@ -80,7 +80,11 @@ describe('createToolDispatcher — askPlantbase', () => {
         item: {
           type: 'function_call_output',
           call_id: 'c1',
-          output: JSON.stringify({ answer: 'Könnyű növény.', escalated: false }),
+          output: JSON.stringify({
+            userQuestion: 'Mi a pothos?',
+            answer: 'Könnyű növény.',
+            escalated: false,
+          }),
         },
       },
       { type: 'response.create' },
@@ -89,6 +93,36 @@ describe('createToolDispatcher — askPlantbase', () => {
       outcome: 'answered',
       escalated: false,
     });
+  });
+
+  it('should tell the model which user question the answer is for', async () => {
+    const h = harness();
+    const dispatcher = createToolDispatcher(h.deps);
+
+    dispatcher.handle(call('askPlantbase', { question: 'Melyik kaktusz igényel kevesebb locsolást?' }));
+    h.resolveSupervisor({
+      answer: 'Mindhárom macskabarát.',
+      escalated: false,
+      userQuestion: 'És melyik macskabarát?',
+    });
+    await flush();
+
+    expect(outputOf(h.sent[0] as object)).toEqual({
+      userQuestion: 'És melyik macskabarát?',
+      answer: 'Mindhárom macskabarát.',
+      escalated: false,
+    });
+  });
+
+  it('should keep the server timing out of what the model sees', async () => {
+    const h = harness();
+    const dispatcher = createToolDispatcher(h.deps);
+
+    dispatcher.handle(call('askPlantbase', { question: 'k' }));
+    h.resolveSupervisor({ answer: 'x', escalated: false, serverMs: 5876 });
+    await flush();
+
+    expect(outputOf(h.sent[0] as object)).not.toHaveProperty('serverMs');
   });
 
   it('should report an escalation', async () => {

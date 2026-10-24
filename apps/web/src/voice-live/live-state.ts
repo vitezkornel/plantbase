@@ -12,6 +12,7 @@ export type LogKind =
   | 'filler'
   | 'user'
   | 'question'
+  | 'supervisor-question'
   | 'answer'
   | 'assistant'
   | 'timing'

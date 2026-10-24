@@ -211,9 +211,19 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
       const begun = now();
       const ask = (): Promise<SupervisorResult> => {
         const requested = now();
+        const said = [...transcripts];
+        const mainQuestion = said.at(-1);
+        log(
+          'supervisor-question',
+          `Supervisor fő kérdése (átirat): ${mainQuestion ?? 'nincs átirat, a recepciós megfogalmazása megy'}`,
+        );
         return deps
-          .fetchSupervisor(question, signal, [...transcripts])
-          .then((result) => {
+          .fetchSupervisor(question, signal, said)
+          .then((fetched) => {
+            const result: SupervisorResult = {
+              ...fetched,
+              ...(mainQuestion === undefined ? {} : { userQuestion: mainQuestion }),
+            };
             if (!signal.aborted) {
               // Where the time between the tool call and the answer went.
               if (requested > begun) {
@@ -343,7 +353,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
       if (call.name === ASK_PLANTBASE_TOOL_NAME) {
         const question = parseQuestion(call.rawArguments);
         if (question !== null) {
-          log('question', `Kérdés a supervisornak: ${question}`);
+          log('question', `Recepciós megfogalmazása: ${question}`);
         }
       }
       if (deps.filler && call.name === ASK_PLANTBASE_TOOL_NAME) {

@@ -16,6 +16,11 @@ export interface SupervisorResult {
   escalated: boolean;
   /** How long the server-side handler took (for the event log only). */
   serverMs?: number;
+  /**
+   * The user's own words (the transcript the supervisor treated as the main
+   * question). The model is told which question the answer is for.
+   */
+  userQuestion?: string;
 }
 
 export interface DispatchInfo {
@@ -156,7 +161,11 @@ export function createToolDispatcher(deps: DispatchDeps): ToolDispatcher {
         if (!inFlight.has(call.callId)) {
           return; // stale: already answered with the stale marker
         }
-        sendOutput(call.callId, result);
+        sendOutput(call.callId, {
+          userQuestion: result.userQuestion ?? question,
+          answer: result.answer,
+          escalated: result.escalated,
+        });
         deps.send({ type: 'response.create' });
         settle(entry, 'answered', result.escalated, result.answer);
       },

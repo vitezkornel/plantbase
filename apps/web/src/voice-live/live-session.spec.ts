@@ -509,14 +509,54 @@ describe('createLiveSession — what the event log shows', () => {
     h.session.dispose();
   });
 
-  it('should show the question handed to the supervisor', () => {
+  it('should show the supervisor main question (transcript) and the receptionist phrasing on separate lines', () => {
+    const h = setup();
+    h.session.onEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'És melyik macskabarát?',
+    });
+
+    h.session.onEvent(askCall('Melyik kaktusz igényel kevesebb locsolást?'));
+
+    expect(lineOf(h.emitted, 'supervisor-question')).toBe(
+      'Supervisor fő kérdése (átirat): És melyik macskabarát?',
+    );
+    expect(lineOf(h.emitted, 'question')).toBe(
+      'Recepciós megfogalmazása: Melyik kaktusz igényel kevesebb locsolást?',
+    );
+    h.session.dispose();
+  });
+
+  it('should say so when there is no transcript and the phrasing is all the supervisor has', () => {
     const h = setup();
 
     h.session.onEvent(askCall('Milyen kaktuszok vannak?'));
 
-    expect(lineOf(h.emitted, 'question')).toBe(
-      'Kérdés a supervisornak: Milyen kaktuszok vannak?',
+    expect(lineOf(h.emitted, 'supervisor-question')).toBe(
+      'Supervisor fő kérdése (átirat): nincs átirat, a recepciós megfogalmazása megy',
     );
+    h.session.dispose();
+  });
+
+  it('should hand the model the transcript the supervisor treated as the main question', async () => {
+    const h = setup();
+    h.session.onEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'És melyik macskabarát?',
+    });
+    h.session.onEvent(askCall('Melyik kaktusz igényel kevesebb locsolást?'));
+
+    h.resolveNext({ answer: 'Mindhárom macskabarát.', escalated: false });
+    await flush();
+
+    const output = h.sent.find(
+      (e) => (e as { type: string }).type === 'conversation.item.create',
+    ) as { item: { output: string } };
+    expect(JSON.parse(output.item.output)).toEqual({
+      userQuestion: 'És melyik macskabarát?',
+      answer: 'Mindhárom macskabarát.',
+      escalated: false,
+    });
     h.session.dispose();
   });
 
