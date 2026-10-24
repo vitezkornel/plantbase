@@ -81,6 +81,11 @@ describe('realtimeInstructions', () => {
     expect(on).toMatch(/ne kommentáld az eltérést/);
   });
 
+  it('should keep real orders escalated but allow the demo order tool, saying that its data is made up', () => {
+    expect(on).toMatch(/Meglévő rendelésről[^.]*magad nem válaszolsz/);
+    expect(on).toMatch(/Kivétel[^.]*getOrderStatus[^.]*demó[^.]*kitalált adatot ad[^.]*ki kell mondanod/);
+  });
+
   it('should hand escalated answers to a colleague', () => {
     expect(on).toContain('escalated');
     expect(on).toContain('kolléga');
