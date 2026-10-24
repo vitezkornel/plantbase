@@ -386,3 +386,104 @@ describe('createLiveSession — failed tool calls and active responses', () => {
     h.session.dispose();
   });
 });
+
+describe('createLiveSession — response.create race and rejection', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const types = (sent: object[]) => sent.map((e) => (e as { type: string }).type);
+  const creates = (sent: object[]) =>
+    sent.filter((e) => (e as { type: string }).type === 'response.create');
+  const ACTIVE_ERROR = {
+    type: 'error',
+    error: {
+      type: 'invalid_request_error',
+      code: 'conversation_already_has_active_response',
+      message: 'Conversation already has an active response in progress: resp_1.',
+    },
+  };
+
+  it('should hold the answer while the nudge response.create is sent but not yet created', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS); // nudge create sent, no response.created yet
+    h.resolveNext({ answer: 'Könnyű.', escalated: false });
+    await flush();
+
+    expect(creates(h.sent)).toHaveLength(1); // only the nudge
+
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent({ type: 'response.done' });
+
+    expect(creates(h.sent)).toHaveLength(2);
+    expect(h.sent.at(-1)).toEqual({ type: 'response.create' });
+    h.session.dispose();
+  });
+
+  it('should send the answer again after response.done when the API rejects it as concurrent', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+    expect(creates(h.sent)).toHaveLength(1);
+
+    h.session.onEvent(ACTIVE_ERROR);
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent({ type: 'response.done' });
+
+    expect(creates(h.sent)).toHaveLength(2);
+    h.session.dispose();
+  });
+
+  it('should retry the rejected answer shortly even when no response.done follows', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    h.session.onEvent(ACTIVE_ERROR);
+    expect(creates(h.sent)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(creates(h.sent)).toHaveLength(2);
+    h.session.dispose();
+  });
+
+  it('should not requeue a rejected nudge', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS);
+    h.session.onEvent(ACTIVE_ERROR);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(creates(h.sent)).toHaveLength(1);
+    h.session.dispose();
+  });
+
+  it('should free the answer after any error for a create that never produced a response', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS);
+    h.session.onEvent({ type: 'error', error: { message: 'boom' } });
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    expect(creates(h.sent)).toHaveLength(2);
+    expect(types(h.sent)).toContain('conversation.item.create');
+    h.session.dispose();
+  });
+
+  it('should drop the requeued answer when the user starts speaking', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+    h.session.onEvent(ACTIVE_ERROR);
+
+    h.session.onEvent({ type: 'input_audio_buffer.speech_started' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(creates(h.sent)).toHaveLength(1);
+    h.session.dispose();
+  });
+});

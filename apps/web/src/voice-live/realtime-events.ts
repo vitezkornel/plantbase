@@ -67,6 +67,19 @@ export function functionCallOf(event: RealtimeEvent): FunctionCall | null {
   };
 }
 
+export function errorCodeOf(event: RealtimeEvent): string | undefined {
+  const error = event.error;
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+  ) {
+    return error.code;
+  }
+  return undefined;
+}
+
 export function errorMessageOf(event: RealtimeEvent): string {
   const error = event.error;
   if (

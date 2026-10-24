@@ -12,6 +12,7 @@ import {
 } from './progress-nudge';
 import {
   agentTranscriptOf,
+  errorCodeOf,
   errorMessageOf,
   functionCallOf,
   isAgentAudioStart,
@@ -50,6 +51,10 @@ export interface LiveSession {
   dispose(): void;
 }
 
+// How long to wait before re-sending an answer the API refused as concurrent
+// when no response.done is known to be coming.
+const ANSWER_RETRY_MS = 400;
+
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`;
 
 export function createLiveSession(deps: LiveSessionDeps): LiveSession {
@@ -63,6 +68,28 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   // active: the API refuses a second concurrent response, so it waits for
   // response.done (and is dropped if the user starts talking first).
   let responseHeld = false;
+  // A response.create we sent whose response.created has not arrived yet: the
+  // API still counts the conversation as busy, so it gates new creates too.
+  let createInFlight = false;
+  let lastCreate: 'nudge' | 'answer' | null = null;
+  let retryHandle: ReturnType<typeof setTimeout> | undefined;
+  const busy = (): boolean => responding || createInFlight;
+
+  const sendCreate = (event: object, source: 'nudge' | 'answer'): void => {
+    createInFlight = true;
+    lastCreate = source;
+    deps.send(event);
+  };
+  const clearRetry = (): void => {
+    clearTimeout(retryHandle);
+    retryHandle = undefined;
+  };
+  const releaseHeld = (): void => {
+    if (responseHeld && !busy()) {
+      responseHeld = false;
+      sendCreate({ type: 'response.create' }, 'answer');
+    }
+  };
 
   const log = (
     kind: Extract<LiveAction, { type: 'log' }>['kind'],
@@ -85,14 +112,17 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
 
   const nudge = createProgressNudge({
     onNudge: () => {
-      if (responding) {
+      if (busy()) {
         return; // a concurrent response.create would be refused
       }
       log('filler', 'Progresszív frissítés kérve (5 s)');
-      deps.send({
-        type: 'response.create',
-        response: { instructions: PROGRESS_NUDGE_INSTRUCTIONS },
-      });
+      sendCreate(
+        {
+          type: 'response.create',
+          response: { instructions: PROGRESS_NUDGE_INSTRUCTIONS },
+        },
+        'nudge',
+      );
     },
   });
 
@@ -122,8 +152,12 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     fetchSupervisor: (question, signal) =>
       deps.fetchSupervisor(question, signal, lastUserTranscript),
     send: (event) => {
-      if (responding && 'type' in event && event.type === 'response.create') {
-        responseHeld = true;
+      if ('type' in event && event.type === 'response.create') {
+        if (busy()) {
+          responseHeld = true;
+          return;
+        }
+        sendCreate(event, 'answer');
         return;
       }
       deps.send(event);
@@ -140,6 +174,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     disposed = true;
     idle.stop();
     nudge.cancel();
+    clearRetry();
     dispatcher.dispose();
   }
 
@@ -155,6 +190,8 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         );
         meter.speechStarted();
         responseHeld = false;
+        createInFlight = false;
+        clearRetry();
         idle.touch();
         nudge.cancel();
         dispatcher.interrupt();
@@ -165,20 +202,39 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         return;
       case 'response.created':
         responding = true;
+        createInFlight = false;
         idle.touch();
         return;
       case 'response.done':
         responding = false;
-        if (responseHeld) {
-          responseHeld = false;
-          deps.send({ type: 'response.create' });
-        }
+        createInFlight = false;
+        releaseHeld();
         return;
       case 'conversation.item.truncated':
         log('truncated', 'Az előzmény levágva (truncation)');
         return;
       case 'error':
         log('error', errorMessageOf(event));
+        // The create we just sent was refused or failed: it will not produce
+        // a response.created, so it must not keep the conversation "busy".
+        createInFlight = false;
+        if (
+          errorCodeOf(event) === 'conversation_already_has_active_response' &&
+          lastCreate === 'answer'
+        ) {
+          // The tool result must never be lost: send it again once the
+          // active response is done, or shortly if no done is coming.
+          responseHeld = true;
+          if (!responding) {
+            clearRetry();
+            retryHandle = setTimeout(() => {
+              retryHandle = undefined;
+              if (!disposed) {
+                releaseHeld();
+              }
+            }, ANSWER_RETRY_MS);
+          }
+        }
         return;
       default:
         break;
