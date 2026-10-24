@@ -62,6 +62,17 @@ describe('realtimeInstructions', () => {
     expect(on).toContain('URL-t nem');
   });
 
+  it('should say the source title only when the answer has one', () => {
+    expect(on).toMatch(/Ha a supervisor válaszában szerepel forráscikk címe[^.]*mondd ki/);
+    expect(on).not.toMatch(/az árat és a forráscikk címét szó szerint mondd ki/);
+  });
+
+  it('should treat a catalogue answer without a source as complete, not as missing something', () => {
+    expect(on).toMatch(/katalógus[^.]*nincs forráscikk[^.]*nem hiány/);
+    expect(on).toMatch(/Ne hiányold a forrást/);
+    expect(on).toMatch(/mondd ki hűen/);
+  });
+
   it('should hand escalated answers to a colleague', () => {
     expect(on).toContain('escalated');
     expect(on).toContain('kolléga');
