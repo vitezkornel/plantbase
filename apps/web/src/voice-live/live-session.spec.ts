@@ -668,7 +668,7 @@ describe('createLiveSession — transcripts for the supervisor', () => {
     expect(h.transcripts).toEqual([]);
     await vi.advanceTimersByTimeAsync(200);
 
-    expect(h.transcripts).toEqual([['korábbi mondat']]);
+    expect(h.transcripts).toEqual([[]]);
     h.session.dispose();
   });
 
@@ -808,6 +808,104 @@ describe('createLiveSession — partial timings in the event log', () => {
     await flush();
 
     expect(timings(h.emitted)).toEqual([]);
+    h.session.dispose();
+  });
+});
+
+describe('createLiveSession — a missing transcript must not promote an old one', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const said = (session: { onEvent(e: never): void }, transcript: string) =>
+    session.onEvent({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript,
+    } as never);
+  const outputOf = (sent: object[]) =>
+    JSON.parse(
+      (
+        sent.find(
+          (e) => (e as { type: string }).type === 'conversation.item.create',
+        ) as { item: { output: string } }
+      ).item.output,
+    ) as Record<string, unknown>;
+
+  it('should send the model question alone when the transcript is late, not the previous turn as the main question', async () => {
+    const h = setup();
+    said(h.session, 'Mennyibe kerül a monstera?');
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent(askCall('Mennyibe kerül a fikusz?'));
+
+    await vi.advanceTimersByTimeAsync(1600);
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+
+    expect(h.transcripts).toEqual([[]]);
+    expect(outputOf(h.sent).userQuestion).toBe('Mennyibe kerül a fikusz?');
+  });
+
+  it('should not wait, and not use the old transcript, when the turn produced an empty transcript', async () => {
+    const h = setup();
+    said(h.session, 'Mennyibe kerül a monstera?');
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    said(h.session, '   ');
+
+    h.session.onEvent(askCall('Mi ez?'));
+    await flush();
+
+    expect(h.transcripts).toEqual([[]]);
+  });
+
+  it('should treat a failed transcription like a missing one', async () => {
+    const h = setup();
+    said(h.session, 'Mennyibe kerül a monstera?');
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    h.session.onEvent({
+      type: 'conversation.item.input_audio_transcription.failed',
+    });
+
+    h.session.onEvent(askCall('Mi ez?'));
+    await flush();
+
+    expect(h.transcripts).toEqual([[]]);
+  });
+
+  it('should use the transcripts again once a new turn has one', async () => {
+    const h = setup();
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    said(h.session, '   ');
+    h.session.onEvent({ type: 'input_audio_buffer.speech_stopped' });
+    said(h.session, 'És a fikusz?');
+
+    h.session.onEvent(askCall('Mennyibe kerül a fikusz?'));
+    await flush();
+
+    expect(h.transcripts).toEqual([['És a fikusz?']]);
+  });
+});
+
+describe('createLiveSession — a held answer survives any failure of the nudge', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const creates = (sent: object[]) =>
+    sent.filter((e) => (e as { type: string }).type === 'response.create');
+
+  it.each([
+    ['a server error code', { type: 'error', error: { code: 'server_error', message: 'x' } }],
+    ['no error code', { type: 'error', error: { message: 'x' } }],
+  ])('should still send the answer after the nudge failed with %s', async (_name, error) => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS); // nudge create in flight
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush(); // answer held behind the nudge
+    expect(creates(h.sent)).toHaveLength(1);
+
+    h.session.onEvent(error);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(creates(h.sent)).toHaveLength(2);
     h.session.dispose();
   });
 });

@@ -82,6 +82,9 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   // tool call, so a call waits for it a moment.
   const transcripts: string[] = [];
   let transcriptPending = false;
+  // The latest turn has no usable transcript (late, empty or failed): the
+  // older ones must not stand in for it as the main question.
+  let transcriptMissing = false;
   const transcriptWaiters = new Set<() => void>();
   const awaitTranscript = (signal: AbortSignal): Promise<void> => {
     if (!transcriptPending) {
@@ -90,6 +93,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         transcriptPending = false; // none is coming: later calls do not wait
+        transcriptMissing = true;
         wake();
       }, TRANSCRIPT_WAIT_MS);
       function release(): void {
@@ -211,7 +215,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
       const begun = now();
       const ask = (): Promise<SupervisorResult> => {
         const requested = now();
-        const said = [...transcripts];
+        const said = transcriptMissing ? [] : [...transcripts];
         const mainQuestion = said.at(-1);
         log(
           'supervisor-question',
@@ -299,6 +303,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
       case 'input_audio_buffer.speech_stopped':
         log('end-of-turn', 'Beszéd vége (end-of-turn)');
         transcriptPending = true;
+        transcriptMissing = false;
         meter.speechStopped(now());
         return;
       case 'response.created':
@@ -326,15 +331,17 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
           // The tool result must never be lost: send it again once the
           // active response is done, or shortly if no done is coming.
           responseHeld = true;
-          if (!responding) {
-            clearRetry();
-            retryHandle = setTimeout(() => {
-              retryHandle = undefined;
-              if (!disposed) {
-                releaseHeld();
-              }
-            }, ANSWER_RETRY_MS);
-          }
+        }
+        if (responseHeld && !responding) {
+          // Whatever failed (a nudge, a refused answer), a held answer must
+          // not wait for a response.done that may never come.
+          clearRetry();
+          retryHandle = setTimeout(() => {
+            retryHandle = undefined;
+            if (!disposed) {
+              releaseHeld();
+            }
+          }, ANSWER_RETRY_MS);
         }
         return;
       default:
@@ -382,11 +389,26 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
       return;
     }
 
+    if (
+      event.type === 'conversation.item.input_audio_transcription.failed' ||
+      (event.type === 'conversation.item.input_audio_transcription.completed' &&
+        userTranscriptOf(event) === null)
+    ) {
+      // Noise or a failed transcription: nothing usable for this turn.
+      transcriptPending = false;
+      transcriptMissing = true;
+      for (const wake of [...transcriptWaiters]) {
+        wake();
+      }
+      return;
+    }
+
     const userText = userTranscriptOf(event);
     if (userText !== null) {
       transcripts.push(userText.slice(0, MAX_TRANSCRIPT_CHARS));
       transcripts.splice(0, Math.max(0, transcripts.length - MAX_TRANSCRIPTS));
       transcriptPending = false;
+      transcriptMissing = false;
       for (const wake of [...transcriptWaiters]) {
         wake();
       }
