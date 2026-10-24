@@ -983,3 +983,55 @@ describe('createLiveSession — bounded answer retries', () => {
     h.session.dispose();
   });
 });
+
+describe('createLiveSession — a response.create that is never acknowledged', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const creates = (sent: object[]) =>
+    sent.filter((e) => (e as { type: string }).type === 'response.create');
+  const errorLines = (emitted: LiveAction[]) =>
+    logs(emitted)
+      .filter((l) => l.kind === 'error')
+      .map((l) => l.text);
+
+  it('should free the busy state, with an event log line, after five seconds of silence', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS); // nudge create in flight
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(errorLines(h.emitted).some((l) => /response.create-re 5 s alatt/.test(l))).toBe(true);
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+    expect(creates(h.sent)).toHaveLength(2); // sent at once, not held
+    h.session.dispose();
+  });
+
+  it('should send an answer that was held behind the silent create once it is freed', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS);
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush(); // held
+    expect(creates(h.sent)).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(creates(h.sent)).toHaveLength(2);
+    h.session.dispose();
+  });
+
+  it('should not complain when response.created arrives in time', async () => {
+    const h = setup({ filler: true });
+    h.session.onEvent(askCall());
+    vi.advanceTimersByTime(NUDGE_DELAY_MS);
+    h.session.onEvent({ type: 'response.created' });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(errorLines(h.emitted)).toEqual([]);
+    h.session.dispose();
+  });
+});

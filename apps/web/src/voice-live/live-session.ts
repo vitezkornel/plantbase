@@ -56,6 +56,9 @@ export interface LiveSession {
 // when no response.done is known to be coming.
 const ANSWER_RETRY_MS = 400;
 const MAX_ANSWER_RETRIES = 3;
+// A response.create that is neither answered by response.created nor by an
+// error within this time stops counting as "in flight".
+const CREATE_ACK_TIMEOUT_MS = 5000;
 
 // Mirrors supervisor-schema.ts (count and length of the transcripts sent).
 const MAX_TRANSCRIPTS = 6;
@@ -125,12 +128,31 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   let retryHandle: ReturnType<typeof setTimeout> | undefined;
   // Re-sends of one tool answer after a refused/failed response.create.
   let answerRetries = 0;
+  let ackHandle: ReturnType<typeof setTimeout> | undefined;
   const busy = (): boolean => responding || createInFlight;
+  const settleInFlight = (): void => {
+    createInFlight = false;
+    clearTimeout(ackHandle);
+    ackHandle = undefined;
+  };
 
   let heldSince: number | null = null;
   const sendCreate = (event: object, source: 'nudge' | 'answer'): void => {
     createInFlight = true;
     lastCreate = source;
+    clearTimeout(ackHandle);
+    ackHandle = setTimeout(() => {
+      ackHandle = undefined;
+      if (disposed || !createInFlight) {
+        return;
+      }
+      createInFlight = false;
+      log(
+        'error',
+        'Nem érkezett válasz a response.create-re 5 s alatt, a várakozás feloldva.',
+      );
+      releaseHeld();
+    }, CREATE_ACK_TIMEOUT_MS);
     if (source === 'answer') {
       log(
         'timing',
@@ -281,6 +303,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     idle.stop();
     nudge.cancel();
     clearRetry();
+    clearTimeout(ackHandle);
     dispatcher.dispose();
   }
 
@@ -298,7 +321,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         responseHeld = false;
         answerRetries = 0;
         heldSince = null;
-        createInFlight = false;
+        settleInFlight();
         clearRetry();
         idle.touch();
         nudge.cancel();
@@ -312,12 +335,12 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         return;
       case 'response.created':
         responding = true;
-        createInFlight = false;
+        settleInFlight();
         idle.touch();
         return;
       case 'response.done':
         responding = false;
-        createInFlight = false;
+        settleInFlight();
         releaseHeld();
         return;
       case 'conversation.item.truncated':
@@ -327,7 +350,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         log('error', errorMessageOf(event));
         // The create we just sent was refused or failed: it will not produce
         // a response.created, so it must not keep the conversation "busy".
-        createInFlight = false;
+        settleInFlight();
         if (
           errorCodeOf(event) === 'conversation_already_has_active_response' &&
           lastCreate === 'answer'
