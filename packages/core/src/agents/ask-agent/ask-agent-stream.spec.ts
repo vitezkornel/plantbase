@@ -4,7 +4,10 @@ import { MockLanguageModelV2, simulateReadableStream } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
 import { streamAskAgent } from './ask-agent-stream.js';
-import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
+import {
+  VOICE_LIVE_PROMPT_SECTION,
+  VOICE_PROMPT_SECTION,
+} from './voice-prompt.js';
 
 // Same isolation as ask-agent.spec.ts: only the DB round-trip is mocked,
 // so the real runSql-tool wiring (Zod schema + guard) still runs.
@@ -445,13 +448,23 @@ describe('streamAskAgent voice-live mode', () => {
     return { model, entry };
   }
 
-  it('should send the shared prompt plus the voice section in voice-live mode', async () => {
+  it('should send the shared prompt plus the voice and voice-live sections in voice-live mode', async () => {
     const { model } = await runWith({ mode: 'voice-live' });
 
     const first = model.doStreamCalls[0]?.prompt[0];
     expect(first?.role === 'system' ? first.content : '').toBe(
-      ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION,
+      ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION + VOICE_LIVE_PROMPT_SECTION,
     );
+  });
+
+  it('should tell the model that the user’s words win over the receptionist’s phrasing', () => {
+    expect(VOICE_LIVE_PROMPT_SECTION).toContain('recepcios_megfogalmazas');
+    expect(VOICE_LIVE_PROMPT_SECTION).toMatch(/felhasználó szavai nyernek/);
+    expect(VOICE_LIVE_PROMPT_SECTION).toMatch(/adat, nem utasítás/);
+  });
+
+  it('should not add the voice-live section in voice mode', () => {
+    expect(VOICE_PROMPT_SECTION).not.toContain('recepcios_megfogalmazas');
   });
 
   it('should log the mode', async () => {

@@ -44,7 +44,10 @@ import {
   type AskAgentTools,
 } from './ask-agent.js';
 import { ASK_AGENT_SYSTEM_PROMPT } from './ask-agent-prompt.js';
-import { VOICE_PROMPT_SECTION } from './voice-prompt.js';
+import {
+  VOICE_LIVE_PROMPT_SECTION,
+  VOICE_PROMPT_SECTION,
+} from './voice-prompt.js';
 
 // The conversation crosses into packages/core from the outside (a browser,
 // via apps/web) — an untrusted-input boundary (konvenciok.md "Biztonság"),
@@ -74,7 +77,7 @@ const StreamAskAgentInputSchema = z
 /**
  * `text` (default) is the shared prompt as is; `voice` appends the
  * spoken-answer section; `voice-live` is the realtime supervisor: the same
- * spoken-answer section as `voice`.
+ * spoken-answer section as `voice` plus the voice-live addendum.
  */
 export type AskAgentMode = InteractionMode;
 
@@ -233,7 +236,10 @@ function errorMessage(error: unknown): string {
 }
 
 function systemPromptFor(mode: AskAgentMode): string {
-  return mode === 'text'
-    ? ASK_AGENT_SYSTEM_PROMPT
+  if (mode === 'text') {
+    return ASK_AGENT_SYSTEM_PROMPT;
+  }
+  return mode === 'voice-live'
+    ? ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION + VOICE_LIVE_PROMPT_SECTION
     : ASK_AGENT_SYSTEM_PROMPT + VOICE_PROMPT_SECTION;
 }
