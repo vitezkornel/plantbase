@@ -55,6 +55,7 @@ export interface LiveSession {
 // How long to wait before re-sending an answer the API refused as concurrent
 // when no response.done is known to be coming.
 const ANSWER_RETRY_MS = 400;
+const MAX_ANSWER_RETRIES = 3;
 
 // Mirrors supervisor-schema.ts (count and length of the transcripts sent).
 const MAX_TRANSCRIPTS = 6;
@@ -122,6 +123,8 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
   let createInFlight = false;
   let lastCreate: 'nudge' | 'answer' | null = null;
   let retryHandle: ReturnType<typeof setTimeout> | undefined;
+  // Re-sends of one tool answer after a refused/failed response.create.
+  let answerRetries = 0;
   const busy = (): boolean => responding || createInFlight;
 
   let heldSince: number | null = null;
@@ -293,6 +296,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         );
         meter.speechStarted();
         responseHeld = false;
+        answerRetries = 0;
         heldSince = null;
         createInFlight = false;
         clearRetry();
@@ -334,7 +338,19 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
         }
         if (responseHeld && !responding) {
           // Whatever failed (a nudge, a refused answer), a held answer must
-          // not wait for a response.done that may never come.
+          // not wait for a response.done that may never come. Bounded: an API
+          // that keeps refusing must not be hammered.
+          if (answerRetries >= MAX_ANSWER_RETRIES) {
+            responseHeld = false;
+            lastCreate = null;
+            clearRetry();
+            log(
+              'error',
+              `Az eredményt nem sikerült átadni a modellnek (${MAX_ANSWER_RETRIES} próbálkozás után), nem küldöm újra.`,
+            );
+            return;
+          }
+          answerRetries += 1;
           clearRetry();
           retryHandle = setTimeout(() => {
             retryHandle = undefined;
@@ -351,6 +367,7 @@ export function createLiveSession(deps: LiveSessionDeps): LiveSession {
     const call = functionCallOf(event);
     if (call !== null) {
       toolPending = true;
+      answerRetries = 0;
       meter.toolCalled(now());
       log(
         'tool',

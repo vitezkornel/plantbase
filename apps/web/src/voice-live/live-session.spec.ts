@@ -909,3 +909,77 @@ describe('createLiveSession — a held answer survives any failure of the nudge'
     h.session.dispose();
   });
 });
+
+describe('createLiveSession — bounded answer retries', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const creates = (sent: object[]) =>
+    sent.filter((e) => (e as { type: string }).type === 'response.create');
+  const ACTIVE = {
+    type: 'error',
+    error: { code: 'conversation_already_has_active_response', message: 'busy' },
+  };
+
+  it('should retry a refused answer at most three times, then report it and stop', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush(); // create #1
+
+    for (let i = 0; i < 6; i += 1) {
+      h.session.onEvent(ACTIVE);
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+
+    expect(creates(h.sent)).toHaveLength(4); // the first send + 3 retries
+    const errorLines = logs(h.emitted)
+      .filter((l) => l.kind === 'error')
+      .map((l) => l.text);
+    expect(errorLines.some((l) => /nem sikerült[^.]*3 próbálkozás/.test(l))).toBe(true);
+    h.session.dispose();
+  });
+
+  it('should not send anything more after giving up, even at response.done', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+    for (let i = 0; i < 4; i += 1) {
+      h.session.onEvent(ACTIVE);
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    const before = creates(h.sent).length;
+
+    h.session.onEvent({ type: 'response.created' });
+    h.session.onEvent({ type: 'response.done' });
+
+    expect(creates(h.sent)).toHaveLength(before);
+    h.session.dispose();
+  });
+
+  it('should count retries per answer, so the next tool call gets its own three', async () => {
+    const h = setup();
+    h.session.onEvent(askCall());
+    h.resolveNext({ answer: 'x', escalated: false });
+    await flush();
+    for (let i = 0; i < 4; i += 1) {
+      h.session.onEvent(ACTIVE);
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+
+    h.session.onEvent({
+      type: 'response.function_call_arguments.done',
+      call_id: 'c2',
+      name: 'askPlantbase',
+      arguments: JSON.stringify({ question: 'újra' }),
+    });
+    h.resolveNext({ answer: 'y', escalated: false });
+    await flush();
+    h.session.onEvent(ACTIVE);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(creates(h.sent).length).toBeGreaterThanOrEqual(6);
+    h.session.dispose();
+  });
+});
